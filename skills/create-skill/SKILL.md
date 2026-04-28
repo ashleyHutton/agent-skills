@@ -59,7 +59,15 @@ Before committing, scan the new skill for anything that looks like a secret:
 grep -niE '([a-f0-9]{8}-[a-f0-9]{4}|[a-f0-9]{32,}|sk-[a-zA-Z0-9]+|ghp_[a-zA-Z0-9]+|xox[bpras]-|AKIA[A-Z0-9]+|bearer [a-zA-Z0-9._-]+)' ~/agent-skills/skills/<name>/SKILL.md
 ```
 
-Also visually confirm no hardcoded credentials, tokens, or keys are present. If anything is found, move it to `~/.config/<skill-name>/` and update the skill to read from file.
+Also visually confirm no hardcoded credentials, tokens, or keys are present.
+
+**If anything is found:**
+
+1. Attempt to move it to `~/.config/<skill-name>/` and update the skill to read from file at runtime.
+2. Re-run the scan to confirm the skill is now clean.
+3. If the secret cannot be cleanly extracted (e.g. it's woven into the instructions in a way that can't be separated), **STOP. Do NOT commit or push.** Tell the user what was found and ask them to help restructure the skill before publishing.
+
+**Only proceed to Step 4 if the scan passes cleanly.**
 
 ## Step 4: Publish
 
