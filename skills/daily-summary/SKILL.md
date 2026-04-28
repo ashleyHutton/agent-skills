@@ -20,9 +20,11 @@ The script outputs structured markdown. Present it directly to the user.
 ## What It Reports
 
 1. **Overview** — total tasks worked, completed, and estimated active hours
-2. **Task breakdown** — each task with project, status, message count, time window, and estimated active time
-3. **Timeline** — chronological view of when work happened on each task
+2. **Task breakdown** — each task with project, status, message count, time window, estimated active time, linked GitHub issues, and PRs
+3. **Timeline** — chronological view of when work happened on each task, with issue/PR links
 4. **Scratch sessions** — non-task conversations summarized separately
+
+GitHub issues are discovered from task titles (e.g. `#408`) and PR bodies (`Fixes #123`). PRs are looked up by branch name via the `gh` CLI. This makes it easy to cross-reference with Everhour or other time tracking — every issue that was touched is surfaced with a direct link.
 
 ## Time Estimation Method
 
