@@ -1,6 +1,6 @@
 # Agent Skills
 
-Reusable skills for [REINS](https://reins.dev) and Claude Code agent workflows.
+Reusable skills for AI agent workflows (Claude Code, REINS, etc.).
 
 Each skill is a self-contained directory with a `SKILL.md` that teaches an AI agent how to perform a specific task. Drop them into your `~/.agents/skills/` directory and reference them from your project's `AGENTS.md`.
 
