@@ -12,8 +12,10 @@ Generates a summary of all work done across REINS projects for a given day, incl
 Run the Python script below via bash. Default is today; pass a date argument for a different day.
 
 ```bash
-python3 ~/.agents/skills/daily-summary/summary.py [YYYY-MM-DD]
+daily-summary [YYYY-MM-DD]
 ```
+
+The script is symlinked to `~/.local/bin/daily-summary` for CLI use. Source lives at `~/.agents/skills/daily-summary/summary.py`.
 
 The script outputs structured markdown. Present it directly to the user.
 
