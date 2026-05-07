@@ -1,6 +1,7 @@
 ---
 name: idea-refine
 description: Refines ideas iteratively. Refine ideas through structured divergent and convergent thinking. Use "idea-refine" or "ideate" to trigger.
+disable-model-invocation: true
 ---
 
 # Idea Refine
