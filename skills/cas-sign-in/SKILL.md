@@ -27,6 +27,10 @@ After adding them, reload: `source ~/.bashrc`
   ```
   Then use `$AB <command>` instead of `agent-browser <command>` in all steps below.
 
+## Important: Dev Environments Only
+
+**Only use this skill against local/dev URLs** (e.g. `localhost`, `garibaldi.tail0349c.ts.net`, or other dev servers). Never attempt to sign in on production domains like `ksdetasn.org`, `kpiconnect.org`, etc.
+
 ## Sign-In Flow
 
 Use a named session to preserve auth cookies across commands.
@@ -99,8 +103,8 @@ $AB --session cas snapshot
 # Define the agent-browser alias
 AB="bun /home/ashley/.bun/install/global/node_modules/agent-browser/bin/agent-browser.js"
 
-# Open a protected TASN page (will redirect to CAS)
-$AB --session cas open https://ksdetasn.org/admin
+# Open a protected TASN page on the dev server (never use production URLs)
+$AB --session cas open http://garibaldi.tail0349c.ts.net:3000/admin
 
 # Confirm we're on the CAS login page
 $AB --session cas get url
