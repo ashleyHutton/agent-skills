@@ -255,28 +255,114 @@ gh label create "ready for kdp" --repo ashleyHutton/kdp-books --description "Fin
 gh issue edit <number> --repo ashleyHutton/kdp-books --add-label "ready for kdp"
 ```
 
-4. Comment on the issue with branch links to:
+4. Comment on the issue with a KDP-form-ordered publishing checklist. The goal is for the user to scan the issue comment while filling out KDP and copy/paste values in the same order the form asks for them.
 
-- final cover PDF
-- final interior PDF
-- `kdp-metadata.yml`
-- `build-spec.md`
-- book README
-- research folder
-- cover concept contact sheet
-- ad keyword plan, if present
+Use this structure for the final issue comment:
 
-Include a `Still needed during KDP publishing` section listing values the user must verify, such as:
+```markdown
+Implementation is ready for KDP review/upload on branch `<branch>`.
 
-- list price
-- print cost and royalty
-- final KDP categories
-- KDP preview approval for cover/interior
-- ASIN
-- Amazon listing URL
-- approval/publication date
-- Amazon item weight/dimensions
-- ad campaign budgets/bids once the listing is live
+## Publishing form values
+
+### Paperback Details
+
+#### Language
+- Language: `<language>`
+
+#### Book Title
+- Book Title: `<title>`
+- Subtitle: `<subtitle or leave blank>`
+
+#### Series
+- Series: `<leave blank / series value>`
+
+#### Edition Number
+- Edition number: `<leave blank unless this is a later edition>`
+
+#### Author
+- Prefix: `<blank/TBD>`
+- First name: `<first>`
+- Middle name: `<blank/TBD>`
+- Last name: `<last>`
+- Suffix: `<blank/TBD>`
+
+#### Contributors
+- Contributors: `<none / values>`
+
+#### Description
+\```text
+<description exactly as intended for KDP>
+\```
+
+#### Publishing Rights
+- Select: `I own the copyright and I hold necessary publishing rights.`
+
+#### Primary Audience
+- Sexually explicit images or title: `No`
+- Reading age: `<leave blank unless children/YA book>`
+
+#### Primary Marketplace
+- Marketplace: `<marketplace>`
+
+#### Categories
+- Planned categories:
+  1. `<category>`
+  2. `<category>`
+  3. `<category>`
+- Low-content book: `Yes` / `No`
+- Large-print book: `No` unless specifically designed as large print
+
+#### Keywords
+1. `<keyword box 1>`
+2. `<keyword box 2>`
+3. `<keyword box 3>`
+4. `<keyword box 4>`
+5. `<keyword box 5>`
+6. `<keyword box 6>`
+7. `<keyword box 7>`
+
+#### Publication Date
+- Select: `Publication date and release date are the same` unless this is a previously published book.
+
+#### Release Date
+- Select: `Release my book for sale now` unless the user wants to schedule release.
+
+### Paperback Content
+- Interior PDF: `<link>`
+- Cover PDF: `<link>`
+- Trim size: `<trim>`
+- Page count: `<page count>`
+- Ink/paper/bleed: `<values>`
+
+### Paperback Rights & Pricing
+- Territories: `All territories` unless user says otherwise.
+- Primary marketplace: `<marketplace>`
+- List price: `<TBD or value>`
+- Royalty / print cost: `<TBD until KDP calculator>`
+
+## Repository files
+- Metadata: `<link>`
+- Build spec: `<link>`
+- Book README: `<link>`
+- Research folder: `<link>`
+- Cover concept contact sheet: `<link>`
+- Ad keyword plan: `<link, if present>`
+
+## Verification completed
+- Interior PDF: `<page count and dimensions>`
+- Cover PDF: `<dimensions>`
+- Metadata YAML parses and includes required sections.
+- Unknown publishing/listing values are marked `TBD`.
+
+## Still needed during/after KDP publishing
+- Confirm KDP preview approval for cover/interior.
+- Confirm list price, print cost, and royalty in KDP.
+- Confirm final KDP categories.
+- Add ASIN, Amazon listing URL, approval/publication date, and Amazon item weight/dimensions after approval.
+- Set ad campaign budgets/bids once the listing is live, if ads are planned.
+```
+
+For fields not shown in the user's current screenshot/page, still include placeholders under the later KDP sections if the value is already known from metadata; otherwise use `TBD`.
 
 Do not close the issue unless the user explicitly asks.
 
