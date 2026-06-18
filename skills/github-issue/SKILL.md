@@ -98,6 +98,7 @@ Prefer the simplest implementation that satisfies the issue and follows existing
 - Do **not** introduce new service objects, classes, concerns, form objects, or other abstraction layers unless the issue clearly warrants them or the existing codebase already uses that pattern for the same kind of behavior.
 - Avoid extracting one-line methods that are only called once. Keep straightforward logic inline when that is clearer.
 - Prefer placing simple domain behavior in the relevant existing model, controller, view, helper, or object rather than creating a new layer.
+- Write user-facing copy for application users, not as a verbatim reflection of the GitHub issue, prompt wording, backend models, database fields, or implementation details. Match nearby product language and keep it helpful and concise.
 - Follow local conventions in the surrounding files over introducing a new architecture style.
 - When considering a new table, first ask whether the requirement can be met with existing data structures. If a new table is still appropriate, keep it minimal and purposeful.
 
