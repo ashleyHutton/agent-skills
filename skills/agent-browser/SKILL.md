@@ -9,6 +9,23 @@ description: Inspect, interact with, and test web pages using agent-browser, a f
 
 ## Quick Reference
 
+### Runtime check
+
+Current `agent-browser` releases declare Node 24+ support, though the packaged native binary can run through older Node wrappers. Before a browser-heavy task, or if the CLI fails immediately, verify:
+
+```bash
+node --version
+agent-browser --version
+agent-browser doctor --json
+agent-browser --help
+```
+
+Use `agent-browser` 0.32.0 or newer. Earlier releases can falsely time out after a page has completed loading and leave stale daemons or discarded tabs in a hung state. Upgrade before browser work when an older version is installed.
+
+Also check the Chrome version reported by `doctor`. `agent-browser` prefers an installed system Chrome even when a newer Chrome for Testing exists in the Puppeteer cache, and an obsolete system browser can cause clicks and Turbo/SPA navigations to hang while the server completes normally. Confirm by starting a fresh session with `AGENT_BROWSER_EXECUTABLE_PATH` set to the current Chrome for Testing binary. If that resolves the problem, persist its path as `executablePath` in `~/.agent-browser/config.json`; do not work around it by bypassing client-side navigation.
+
+If `agent-browser` reports a syntax error such as `Unexpected token '?'`, the shell is finding an old Node. Fix `node` on `PATH` or run the CLI through a modern runtime before continuing; do not keep retrying the broken command.
+
 ### Open a page
 ```bash
 agent-browser open <url>
@@ -128,10 +145,17 @@ agent-browser wait ".dashboard"                           # Wait for navigation
 agent-browser snapshot -i
 ```
 
+## Hung or Stuck Sessions
+
+If any `agent-browser` command hangs or times out, stop browser verification immediately. Do not retry the command, probe the stale session, open a replacement session, or attempt recovery in the same task. Report the hang to the user and continue only if they explicitly ask for another browser attempt.
+
+You may capture console output, errors, or a screenshot only when the browser is still responsive. Never run additional `agent-browser` commands against an unresponsive session.
+
 ## Tips
 
 - **snapshot** is the go-to for understanding what's on the page — it shows the accessibility tree, which reveals what screen readers see
 - Use **eval** for anything the snapshot doesn't cover (computed styles, data attributes, complex DOM queries)
-- Refs (`@e1`, `@e2`, ...) are stable within a session until the page changes — use them for interaction
-- Use `--session` to isolate tests from each other
+- Refs (`@e1`, `@e2`, ...) are stable within a session until the page changes — take a fresh snapshot after navigation, form submit, or DOM updates
+- Use `--session` to isolate tests from each other; use a fresh named session for each feature test
+- Prefer `agent-browser wait ".ready-selector"` over long sleeps after sign-in or navigation
 - Use `-s` (selector scope) on snapshot to focus on a specific part of the page
