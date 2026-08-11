@@ -27,15 +27,29 @@ dip rspec
 All specs must pass. If any fail:
 1. Investigate whether the failure is related to your changes or pre-existing.
 2. If related to your changes, fix them and re-run.
-3. If pre-existing (fails on main too), note it in the PR description but do not block on it.
+3. If pre-existing (fails on the resolved base branch too), note it in the PR description but do not block on it.
 
 ## 3. Rebase on the latest base branch
 
-Determine which branch you branched off of (usually `main`):
+Determine the PR base branch before rebasing. **Do not assume `main`.** Use this priority order:
+
+1. If the user or task context names a base branch (for example `staging`), use that branch.
+2. Otherwise, inspect the repository default branch:
 
 ```bash
 git fetch origin
-git rebase origin/main
+git remote show origin | sed -n 's/.*HEAD branch: //p'
+# or:
+git symbolic-ref --short refs/remotes/origin/HEAD | sed 's#^origin/##'
+```
+
+3. If the base branch is still unclear, ask the user before continuing.
+
+Then rebase on the resolved base branch:
+
+```bash
+git fetch origin
+git rebase origin/<base-branch>
 ```
 
 If there are merge conflicts, resolve them, then re-run `dip rspec` to confirm nothing broke.
@@ -67,7 +81,7 @@ gh pr create \
 ```
 
 ### Base branch
-Always set `--base` to the branch you branched off of (usually `main`).
+Always set `--base` to the resolved base branch from step 3. Do not use `main` unless step 3 specifically resolved the base branch to `main`.
 
 ### Title
 Use a clear, concise title. Include the issue number if there is one, e.g.:

@@ -18,6 +18,8 @@ export CAS_PASSWORD="your-password"
 
 After adding them, reload: `source ~/.bashrc`
 
+**Automation note:** Some machines have a non-interactive guard near the top of `~/.bashrc` (`case $- ... return`) before the CAS exports. In non-interactive tool commands, `source ~/.bashrc` may return before loading `CAS_USERNAME` / `CAS_PASSWORD`, falsely making them look missing. If a non-interactive check says credentials are missing, verify with `grep -n "CAS_" ~/.bashrc` or run the browser commands through an interactive shell (for example `bash -ic '...'`) so the exports after the guard are loaded.
+
 ## Prerequisites
 
 - The **agent-browser** skill must be loaded (this skill uses agent-browser commands)

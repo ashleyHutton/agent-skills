@@ -51,12 +51,49 @@ docker logs <container-name> --tail 20
 
 ### Port Conflicts
 
-If `dip up` fails with "port is already allocated", other Docker containers from different projects are occupying the required ports. Run `dipstop` to shut down all running Docker Compose projects, then retry:
+If `dip up` fails with "port is already allocated", other Docker containers from different projects are occupying the required ports. Run `dipstop` to shut down all running Docker Compose projects, then retry.
+
+`dipstop` is defined in Ashley's `~/.bashrc` as an interactive Bash function, so agent/tool shells will not find it directly. When the agent needs to run it, use an interactive Bash shell:
 
 ```bash
-dipstop
+bash -ic 'dipstop'
 dip up -d
 ```
+
+If the user is running it in their own interactive terminal, plain `dipstop` is fine. If `dipstop` is not available, inspect conflicts with `docker ps --format 'table {{.Names}}\t{{.Ports}}'` and stop only the containers occupying the required ports.
+
+### MinIO and Tailscale URLs
+
+For apps that run a local MinIO server and will be tested through the machine's Tailscale hostname, configure MinIO before starting the app. Presigned S3/ActiveStorage URLs are generated from the app's MinIO endpoint; if the endpoint stays as `localhost`, `127.0.0.1`, `lvh.me`, or a Docker-only hostname, links can work inside containers but fail in the user's browser over Tailscale.
+
+Before `dip up -d`, add/update the project-specific `docker-compose.$USER.yml` override so:
+
+- app services that generate or upload files use the Tailscale MinIO endpoint, for example `MINIO_ENDPOINT: "http://<tailscale-hostname>:9000"`
+- background job services also get the same endpoint, if they generate uploads/PDFs
+- the MinIO service advertises browser-reachable URLs, for example:
+  - `MINIO_SERVER_URL: "http://<tailscale-hostname>:9000"`
+  - `MINIO_BROWSER_REDIRECT_URL: "http://<tailscale-hostname>:9090"`
+- MinIO API/console ports are published on the host and match those URLs, commonly `9000:9000` and `9090:9090`
+
+If another project already has MinIO bound to 9000/9090, either stop that project's MinIO container or choose alternate host ports and make the Tailscale endpoint/redirect URL use those same ports. After changing the override, run `dip up -d` so Docker recreates the affected app/worker/MinIO containers.
+
+Example override shape:
+
+```yaml
+services:
+  rails:
+    environment:
+      MINIO_ENDPOINT: "http://garibaldi.tail0349c.ts.net:9000"
+  sidekiq:
+    environment:
+      MINIO_ENDPOINT: "http://garibaldi.tail0349c.ts.net:9000"
+  minio:
+    environment:
+      MINIO_SERVER_URL: "http://garibaldi.tail0349c.ts.net:9000"
+      MINIO_BROWSER_REDIRECT_URL: "http://garibaldi.tail0349c.ts.net:9090"
+```
+
+Verify by uploading a small temporary object through the app's storage service and opening its generated presigned URL with `agent-browser`; the URL host should be the Tailscale hostname and the body should load in the browser.
 
 ### Networking Issues
 

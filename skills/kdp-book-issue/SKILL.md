@@ -113,7 +113,7 @@ N/A — not a browser/app bug report.
 - [ ] Create/update `books/<book-slug>/` and `research/` structure.
 - [ ] Create/update `build-spec.md` with page sequence, fields, KDP specs, and cover strategy.
 - [ ] Create/update `kdp-metadata.yml`, using `TBD` for unverified values.
-- [ ] Generate at least 3 cover PNG concepts plus a contact sheet before final cover generation.
+- [ ] Follow `docs/dev/cover-generation.md` for cover workflow, including Nano Banana prompts, cover previews/contact sheet, selection notes, and final cover generation.
 - [ ] Select or present cover direction as appropriate.
 - [ ] Generate final KDP-ready interior and full-cover PDFs with stable filenames.
 - [ ] Update `docs/book-ideas.md`.
@@ -177,30 +177,9 @@ Metadata must follow `docs/dev/metadata-schema.md`. Common unknown values to kee
 
 ## 5. Cover workflow
 
-Always follow `docs/dev/cover-generation.md`.
+Do **not** duplicate the cover process in this skill. Always follow the current repository source of truth: `docs/dev/cover-generation.md`.
 
-For every new/revised cover:
-
-1. Document top-seller visual observations in the build spec or research notes.
-2. Generate at least 3 distinct front-cover PNG concepts.
-3. Generate a contact sheet PNG.
-4. Compare at thumbnail size for:
-   - title readability
-   - subtitle/copy quality
-   - typography consistency
-   - niche clarity
-   - differentiation
-   - safe, original motifs
-5. Record selected concept and rationale.
-6. Generate the final full-cover PDF only after a direction is selected.
-
-Important lessons from the Knitting Project Journal session:
-
-- A subtitle should sound like book cover copy, not a raw keyword list.
-- Still include market-relevant terms buyers expect; do not make the subtitle so clever that it loses niche clarity.
-- Keep typography consistent. Prefer one font family with weight/size changes or two families with clear roles.
-- Avoid bottom feature strips separated only by bullets/dots. If feature words are useful, format them intentionally as badges, tabs, chips, or a compact checklist.
-- If the user gives the agent final say on cover direction, still show the options/contact sheet when ready and document the selection rationale.
+When planning or implementing cover work, explicitly reference that doc and use its current requirements for Nano Banana prompts, preview concepts, contact sheets, thumbnail review, selection notes, final full-cover generation, and safety/IP checks.
 
 ## 6. Asset generation and validation
 

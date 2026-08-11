@@ -12,18 +12,24 @@ When the user shares a GitHub issue URL, follow this workflow unless they give s
 
 Before doing any work, create a new task for this issue. The task should be worked on in its own session — do NOT do the analysis and planning in the current conversation.
 
-If the user specifies a branch to use, use that branch. Otherwise let the task system create one.
+If the user specifies an existing branch to work on, pass that branch as `branch_name` so Reins adopts it. `branch_name` means "the task branch to create or adopt" — it is **not** the base branch to branch from.
+
+If the user specifies a branch or PR to branch **from** (for example, "make this branch off PR #406"), resolve that PR/branch first and create the task branch from that base using the current approved Reins workflow. Do **not** pass the base branch as `branch_name`. If the current Reins tool does not expose a direct `base_branch` parameter, use the project/task workflow that branches from the requested base, or stop and tell the user that task creation needs a base-branch-capable workflow.
+
+Otherwise, let the task system create a new task branch.
+
+Always include `prompt` so Reins creates the task and immediately starts a dedicated task session in the background.
 
 ```
 create_task(
   title: "<issue title>",
   description: "Analyze and plan implementation for GitHub issue #<number>.",
-  branch_name: "<branch if specified>",
+  branch_name: "<existing task branch to adopt, if explicitly specified>",
   prompt: "<include the full github-issue skill instructions and the issue URL so the task session knows what to do>"
 )
 ```
 
-The prompt passed to the task should instruct it to follow steps 1–6 below.
+The prompt passed to the task should instruct the dedicated task session to follow steps 1–6 below.
 
 ## 1. Read the issue
 

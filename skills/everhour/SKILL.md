@@ -87,7 +87,7 @@ curl -s -X DELETE \
 
 1. Get the GitHub issue number from context (e.g., issue #591)
 2. Look up the GitHub issue ID: `gh api repos/<owner>/<repo>/issues/<number> --jq '.id'`
-3. Ask the user how much time to log and for what date (default: today)
+3. Use the date specified by the user. If no date is specified, assume today in Central Time (`TZ=America/Chicago date +%F`) without asking for confirmation.
 4. Read the API key: `EVERHOUR_API_KEY=$(cat ~/.config/everhour/api_key | tr -d '[:space:]')`
 5. POST the time entry
 6. Confirm what was logged
@@ -97,4 +97,5 @@ curl -s -X DELETE \
 - Minimum time is 60 seconds (1 minute)
 - Time is always in seconds
 - Date format is `YYYY-MM-DD`
+- When the user does not specify a date, use the current date in Central Time without confirming it first
 - The API key authenticates as Ashley (user 983933) — time is always logged under her account
