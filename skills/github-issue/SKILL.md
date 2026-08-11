@@ -84,12 +84,16 @@ If the issue is not a bug report, or the bug is not browser-reproducible (e.g., 
 
 ## 4. Analyze the codebase
 
-Before writing a plan, understand the relevant code:
+Before writing a plan, read the `codebase-design` skill at `/home/ashley/.agents/skills/codebase-design/SKILL.md` and apply its deep-module vocabulary and principles throughout the code analysis and plan.
+
+Understand the relevant code:
 
 - Identify which models, controllers, views, and tests are involved
 - Read the key files that will need to change
 - Check for existing patterns in the codebase that the implementation should follow
 - Look at related tests to understand testing conventions
+- Identify the affected module's interface and seam, and assess whether the proposed change increases depth, leverage, and locality
+- Avoid shallow pass-through modules or hypothetical seams; if a new adapter or abstraction is proposed, explain why it earns its interface
 
 ## 4.5. Implementation guidance
 
@@ -130,7 +134,7 @@ Write the plan to `.plans/issue<number>.local.md` with this structure:
 <Relevant patterns found in the codebase that the implementation should follow>
 
 ## Simplicity/Architecture Notes
-<How the implementation will avoid unnecessary abstraction. Note why any new class/service object/table is necessary, if one is proposed.>
+<Apply the codebase-design skill's vocabulary and principles. Explain how the implementation keeps interfaces small, places seams cleanly, and improves depth, leverage, and locality without unnecessary abstraction. Note why any new module, adapter, class/service object, or table is necessary, if one is proposed.>
 
 ## Database Changes
 <If no schema changes are needed, write "None." If a new table is proposed, include the proposed shape: table name, columns and types, indexes/constraints, associations, and why existing tables are not sufficient. Keep new tables minimal.>
