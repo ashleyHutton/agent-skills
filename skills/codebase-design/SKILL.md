@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.
+description: Shared vocabulary for designing deep, adaptable modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, reduce coupling, choose direct versus event-based collaboration, model transformations, replace inheritance, manage configuration, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.
 ---
 
 # Codebase Design
@@ -64,6 +64,18 @@ When designing an interface, ask:
 - **The interface is the test surface.** Callers and tests cross the same seam. If you want to test *past* the interface, the module is probably the wrong shape.
 - **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a seam unless something actually varies across it.
 
+## Design for adaptability
+
+Adaptability means locating real change pressure at a **Seam**, putting caller-relevant knowledge in the **Interface**, and keeping decisions in the **Implementation** for **Locality**. Introduce an **Adapter** only where collaboration actually varies.
+
+- **Leaked knowledge:** reduce structural, decision, and hidden-state coupling without replacing a clear direct call with indirection.
+- **Temporal behavior:** choose direct collaboration or the smallest event mechanism that matches the required state and time semantics.
+- **Data flow:** model naturally input-to-output work as transformations, usually hidden inside the **Implementation**.
+- **Reuse:** distinguish polymorphism through a language interface/protocol from delegation, composition, or shared implementation; none is the broader **Interface** by itself.
+- **Deployment variation:** externalize values that genuinely vary while keeping stable behavior in code and required configuration in the **Interface**.
+
+See [ADAPTABILITY.md](ADAPTABILITY.md) for the full decision guide and proportionality check.
+
 ## Designing for testability
 
 Good interfaces make testing natural:
@@ -112,3 +124,5 @@ Good interfaces make testing natural:
 
 - **Deepening a cluster given its dependencies** — see [DEEPENING.md](DEEPENING.md): dependency categories, seam discipline, and replace-don't-layer testing.
 - **Exploring alternative interfaces** — see [DESIGN-IT-TWICE.md](DESIGN-IT-TWICE.md): spin up parallel sub-agents to design the interface several radically different ways, then compare on depth, locality, and seam placement.
+- **Designing for adaptability** — see [ADAPTABILITY.md](ADAPTABILITY.md): decide among direct collaboration, events, transformations, inheritance alternatives, and configuration based on actual change pressure.
+- **Adaptability research provenance** — see [ADAPTABILITY-RESEARCH.md](ADAPTABILITY-RESEARCH.md): source hierarchy, evidence limits, and codebase-design synthesis behind the adaptability guidance.

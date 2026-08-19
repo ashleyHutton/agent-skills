@@ -36,6 +36,7 @@ Each sub-agent outputs:
 3. What the implementation hides behind the seam
 4. Dependency strategy and adapters (see [DEEPENING.md](DEEPENING.md))
 5. Trade-offs — where leverage is high, where it's thin
+6. Adaptability rationale when relevant — state flow, direct versus event collaboration, inheritance or configuration coupling, and the change pressure the **Seam** addresses
 
 ### 3. Present and compare
 

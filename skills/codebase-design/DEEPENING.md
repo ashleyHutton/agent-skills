@@ -28,6 +28,7 @@ Third-party services (Stripe, Twilio, etc.) you don't control. The deepened modu
 
 - **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a port unless at least two adapters are justified (typically production + test). A single-adapter seam is just indirection.
 - **Internal seams vs external seams.** A deep module can have internal seams (private to its implementation, used by its own tests) as well as the external seam at its interface. Don't expose internal seams through the interface just because tests use them.
+- **Queue and event adapters follow the same discipline.** Treat event transports as **Adapters** only where the **Seam** is real. Caller-relevant ordering, delivery, and failure expectations are part of the broader **Interface**, not merely details of a language interface/protocol or transport **Implementation**.
 
 ## Testing strategy: replace, don't layer
 
