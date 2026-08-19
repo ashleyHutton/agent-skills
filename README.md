@@ -9,10 +9,9 @@ Each skill is a self-contained directory with a `SKILL.md` that teaches an AI ag
 | Skill | Description |
 |-------|-------------|
 | [agent-browser](skills/agent-browser/) | Headless browser automation via `agent-browser` CLI — DOM inspection, accessibility audits, screenshots, form testing |
-| [code-review](skills/code-review/) | Code review using a delegated sub-agent with high reasoning (GPT 5.4 xhigh) |
+| [code-review](skills/code-review/) | Review correctness and codebase design using a delegated GPT 5.5 sub-agent with max reasoning |
 | [dip](skills/dip/) | Docker Compose development workflows via the `dip` CLI |
 | [everhour](skills/everhour/) | Log time to Everhour against GitHub issues |
-| [finish-task](skills/finish-task/) | Wrap up a task — update docs, merge, push, close |
 | [github-issue](skills/github-issue/) | Full workflow for GitHub issues — read, analyze, plan, implement with red-green-refactor |
 | [pull-request](skills/pull-request/) | Open a GitHub PR with changelog, tests, rebase, and reviewer assignment |
 | [qa-handoff](skills/qa-handoff/) | Prepare test data and browser links for manual QA verification |

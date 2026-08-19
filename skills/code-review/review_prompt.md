@@ -31,6 +31,31 @@ When flagging a bug, you will also provide an accompanying comment. Once again, 
 
 Below are some more detailed guidelines that you should apply to this specific review.
 
+CODEBASE DESIGN REVIEW:
+
+The delegation prompt includes the current `codebase-design` skill and its adaptability guidance. Review the patch for adherence to those principles in addition to functional correctness.
+
+A design issue qualifies under maintainability guideline 1 only when it is:
+
+- introduced or materially worsened by the patch;
+- tied to a specific changed line;
+- supported by a named codebase-design principle;
+- concrete enough to show the resulting leaked knowledge, change ripple, shallow interface, hidden dependency, or mismatched mechanism; and
+- actionable without demanding a broad redesign unrelated to the patch.
+
+In particular, inspect whether the patch:
+
+- introduces a shallow pass-through module, interface, seam, or adapter that adds caller knowledge without leverage;
+- exposes implementation structure through structural call chains, ambient/global state, or a needlessly broad interface;
+- creates a hypothetical seam where behavior does not actually vary;
+- uses events, transformations, inheritance, delegation, mixins, or configuration for a purpose that does not match the adaptability guidance;
+- makes ordering, failure, configuration, or other caller-relevant obligations implicit even though they are part of the Interface; or
+- spreads one decision or source of knowledge across callers instead of preserving Locality in one Implementation.
+
+Do not flag a patch merely because another design is possible, a direct implementation is not maximally abstract, or the surrounding codebase already has design debt. Do not require a new abstraction solely for mocking, stylistic purity, or hypothetical future variation. Use the codebase-design vocabulary precisely and explain the concrete maintenance scenario that makes the finding matter.
+
+Treat a material P1/P2 design violation that the author should fix before merge as making the patch incorrect. A P3 design observation may be reported without making an otherwise functionally correct patch incorrect.
+
 HOW MANY FINDINGS TO RETURN:
 
 Output all findings that the original author would fix if they knew about it. If there is no finding that a person would definitely love to see and fix, prefer outputting no findings. Do not stop at the first qualifying finding. Continue until you've listed every qualifying finding.

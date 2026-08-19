@@ -1,12 +1,12 @@
 ---
 name: code-review
-description: Review the current branch's code changes for bugs and correctness issues using GPT 5.5 with max reasoning. Use when the user asks to review code, review a branch, or run a code review after verifying things work in the browser.
+description: Review the current branch's code changes for bugs, correctness, and adherence to codebase-design principles using GPT 5.5 with max reasoning. Use when the user asks to review code, review a branch, or run a code review after verifying things work in the browser.
 disable-model-invocation: true
 ---
 
 # Code Review
 
-Performs a thorough code review of the current branch's diff against the base branch, using OpenAI GPT 5.5 with max reasoning for maximum analysis depth.
+Performs a thorough review of the current branch's diff against the base branch for correctness and adherence to the `codebase-design` skill, using OpenAI GPT 5.5 with max reasoning for maximum analysis depth.
 
 **IMPORTANT:** This review MUST run in a sub-agent because the current session uses a different provider (Anthropic) and cannot switch to OpenAI mid-session. You must use the `delegate` tool immediately — do NOT attempt to switch the current session's model.
 
@@ -14,7 +14,7 @@ Performs a thorough code review of the current branch's diff against the base br
 
 ## Steps
 
-### 1. Gather the diff FIRST (before delegating)
+### 1. Gather the diff and design guidance FIRST (before delegating)
 
 Gather the diff in the current session so it can be passed to the sub-agent in the prompt. This avoids the sub-agent needing to figure out the base branch.
 
@@ -31,6 +31,15 @@ If the diff is very large, also get a summary:
 ```bash
 git diff --stat $(git merge-base HEAD origin/<base_branch>)..HEAD
 ```
+
+Read these files verbatim so their current guidance can be included in the review prompt:
+
+```text
+/home/ashley/.agents/skills/codebase-design/SKILL.md
+/home/ashley/.agents/skills/codebase-design/ADAPTABILITY.md
+```
+
+Follow links from those files only when the changed code requires the specialized workflow they describe.
 
 ### 2. Delegate to a sub-agent with GPT 5.5 max
 
@@ -58,7 +67,8 @@ The review prompt lives in `review_prompt.md` in this skill's directory. Read it
 Construct the delegation prompt by concatenating:
 
 1. The **entire contents** of `review_prompt.md` exactly as-is (do NOT paraphrase, summarize, or modify it)
-2. Then append the following output format override and the diff:
+2. A `CODEBASE DESIGN GUIDANCE` section containing the **entire contents** of `codebase-design/SKILL.md` and `codebase-design/ADAPTABILITY.md`, each labeled with its source path
+3. Then append the following output format override and the diff:
 
 ```
 IMPORTANT — OUTPUT FORMAT OVERRIDE:
@@ -84,7 +94,7 @@ The original prompt above requests JSON output. Instead, format your response as
 **File:** `<file_path>` (lines <start>-<end>)
 **Confidence:** <as percentage>
 
-<body — one paragraph explaining why this is a bug>
+<body — one paragraph explaining why this is a bug or material codebase-design violation>
 
 (If applicable, include a suggestion block with fix)
 
@@ -112,5 +122,6 @@ The sub-agent's response will come back already formatted as human-readable mark
 ## Notes
 
 - This skill is designed to be run once development is complete and browser testing has confirmed functionality.
+- Codebase-design findings must be concrete, introduced by the patch, and actionable. Do not report subjective alternatives, pre-existing design debt, or requests for broad refactoring.
 - The delegation only works in **task sessions** (not scratch/assistant sessions) since the `delegate` tool is task-only.
 - If the diff is extremely large (>10,000 lines), consider reviewing in chunks by directory or feature area — delegate multiple sub-agents, one per area.
