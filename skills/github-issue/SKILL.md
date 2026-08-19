@@ -90,7 +90,7 @@ If the issue is not a bug report, or the bug is not browser-reproducible (e.g., 
 
 ## 4. Analyze the codebase
 
-Before writing a plan, read the `codebase-design` skill at `/home/ashley/.agents/skills/codebase-design/SKILL.md` and apply its deep-module vocabulary and principles throughout the code analysis and plan.
+IMPORTANT: Before writing a plan, read the `codebase-design` skill at `/home/ashley/.agents/skills/codebase-design/SKILL.md` and apply principles throughout the code analysis and plan.
 
 Understand the relevant code:
 
@@ -124,17 +124,14 @@ Write the plan to `.plans/issue<number>.local.md` with this structure:
 ## Issue Details
 <Summary of the issue and any important context from comments>
 
-## Labels
-<Issue labels, if any>
-
 ## Scope/Clarification
 <Bullet points clarifying what's in and out of scope based on the full issue discussion>
 
 ## Figma Design Context
-<Description of the mockups and key design decisions, or "No Figma mockups linked">
+<Description of the mockups and key design decisions, or leave out if none are linked>
 
 ## Bug Verification
-<If this is a bug report: describe what you found when reproducing in the browser. Include what you saw, whether the bug was confirmed, and any root cause clues from the DOM/styles. If not a bug report, write "N/A — not a bug report.">
+<If this is a bug report: describe what you found when reproducing in the browser. Include what you saw, whether the bug was confirmed, and any root cause clues from the DOM/styles. If not a bug report, leave this out>
 
 ## Organizational Patterns
 <Relevant patterns found in the codebase that the implementation should follow>
@@ -143,7 +140,7 @@ Write the plan to `.plans/issue<number>.local.md` with this structure:
 <Apply the codebase-design skill's vocabulary and principles. Explain how the implementation keeps interfaces small, places seams cleanly, and improves depth, leverage, and locality without unnecessary abstraction. Note why any new module, adapter, class/service object, or table is necessary, if one is proposed.>
 
 ## Database Changes
-<If no schema changes are needed, write "None." If a new table is proposed, include the proposed shape: table name, columns and types, indexes/constraints, associations, and why existing tables are not sufficient. Keep new tables minimal.>
+<If no schema changes are needed, leave this out. If a new table is proposed, include the proposed shape: table name, columns and types, indexes/constraints, associations, and why existing tables are not sufficient. Keep new tables minimal. Write this in the format of a migration file.>
 
 ## Implementation Plan
 
