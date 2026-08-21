@@ -172,6 +172,13 @@ The last task in every plan should be a browser smoke test using `agent-browser`
   - If the issue was a visual/layout bug: confirm the fix at the relevant screen sizes.
   - If a new feature was added: walk through the full user flow (create, view, edit, delete — whichever apply).
   - Take screenshots as evidence of the working state.
+  - If the change introduces visible new behavior, capture 1–3 screenshots that clearly demonstrate it and attach them to a concise GitHub issue comment using `gh issue comment --attach`, following [GitHub CLI's attachment workflow](https://github.com/cli/cli/issues/13256#issuecomment-5330474190). Use descriptive Markdown image references when placement matters, and pass each referenced local file with a matching `--attach` flag:
+    ```bash
+    gh issue comment <number> --repo <owner>/<repo> --body-file screenshots.md \
+      --attach ./new-behavior-1.png \
+      --attach ./new-behavior-2.png
+    ```
+    Skip this only when screenshots are not applicable (for example, a background job, API-only, or documentation change), and state why. If the installed `gh` does not support `--attach`, retain the local screenshots and tell the user that uploading is blocked rather than silently omitting them.
   - If agent-browser cannot validate after a reasonable targeted attempt, stop instead of looping. Tell the user what was attempted, why validation is blocked or inconclusive, and any evidence gathered. Ask whether to try a different validation approach or proceed to QA handoff with the limitation noted.
 
 **Do NOT report the implementation as complete until browser verification passes or the user explicitly approves proceeding despite inconclusive browser validation.**
