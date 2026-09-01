@@ -74,7 +74,21 @@ Wait for their answer. Do **not** request a reviewer without confirmation.
 
 If the change adds or modifies user-visible views, use `agent-browser` to capture 1–3 screenshots that clearly demonstrate the new behavior. Choose representative states and viewport sizes rather than documenting every screen.
 
-Add descriptive Markdown image references to the PR body, then attach each referenced local file with `gh pr create --attach`, following [GitHub CLI's attachment workflow](https://github.com/cli/cli/issues/13256#issuecomment-5330474190):
+### Use the released GitHub CLI attachment support
+
+File attachments are officially available in GitHub CLI **v2.99.0 and newer**, as announced in [`cli/cli#13256`](https://github.com/cli/cli/issues/13256#issuecomment-5500144244). Before opening a visible-change PR, verify that the active stable binary supports `--attach`:
+
+```bash
+which gh
+gh version
+gh pr create --help | grep -- --attach
+```
+
+This machine keeps the current stable release at `/home/ashley/.pi/agent/bin/gh`, which is first on `PATH`, and `/home/ashley/.local/bin/gh`. If `gh` is older than v2.99.0 or lacks `--attach`, update it from the official [GitHub CLI releases](https://github.com/cli/cli/releases/latest), then re-run the checks. Do not seek preview artifacts or build an unreleased branch.
+
+Only report uploading as blocked if updating/running the released CLI or authenticating the upload actually fails.
+
+Add descriptive Markdown image references to the PR body, then attach each referenced local file with `gh pr create --attach`, following the [released GitHub CLI attachment workflow](https://github.com/cli/cli/issues/13256#issuecomment-5500144244). Pass each referenced local file with a matching `--attach` flag. You may also provide image alt text after `#`, such as `--attach './order-lookup-results.png#Order lookup results'`:
 
 ```markdown
 ## Screenshots
@@ -82,7 +96,13 @@ Add descriptive Markdown image references to the PR body, then attach each refer
 ![New order lookup results](./order-lookup-results.png)
 ```
 
-Skip screenshots when they are not applicable, such as API-only, background-job, or documentation changes. If the installed `gh` does not support `--attach`, retain the local screenshots and tell the user that uploading is blocked rather than silently omitting them.
+Skip screenshots only when they are not applicable, such as API-only, background-job, or documentation changes. If a PR was already opened before screenshots were attached, update it with the released CLI rather than leaving the images local:
+
+```bash
+gh pr edit <number> --body-file pr-body.md \
+  --attach ./screenshot-1.png \
+  --attach ./screenshot-2.png
+```
 
 ## 7. Open the PR
 
