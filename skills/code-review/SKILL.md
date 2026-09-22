@@ -1,14 +1,14 @@
 ---
 name: code-review
-description: Review the current branch's code changes for bugs, correctness, and adherence to codebase-design principles using GPT 5.5 with max reasoning. Use when the user asks to review code, review a branch, or run a code review after verifying things work in the browser.
+description: Review the current branch's code changes for bugs, correctness, and adherence to codebase-design principles. Use when the user asks to review code, review a branch, or run a code review after verifying things work in the browser.
 disable-model-invocation: true
 ---
 
 # Code Review
 
-Performs a thorough review of the current branch's diff against the base branch for correctness and adherence to the `codebase-design` skill, using OpenAI GPT 5.5 with max reasoning for maximum analysis depth.
+Performs a thorough review of the current branch's diff against the base branch for correctness and adherence to the `codebase-design` skill.
 
-**IMPORTANT:** This review MUST run in a sub-agent because the current session uses a different provider (Anthropic) and cannot switch to OpenAI mid-session. You must use the `delegate` tool immediately — do NOT attempt to switch the current session's model.
+**IMPORTANT:** This review MUST run in a sub-agent. Use the `delegate` tool and inherit the current model, provider, and reasoning settings. Do not override model selection unless the user explicitly requests it.
 
 > Note: The `delegate` tool is only available in task sessions. If this is a scratch/assistant session, tell the user you need to run this from a task session.
 
@@ -41,19 +41,14 @@ Read these files verbatim so their current guidance can be included in the revie
 
 Follow links from those files only when the changed code requires the specialized workflow they describe.
 
-### 2. Delegate to a sub-agent with GPT 5.5 max
+### 2. Delegate to a sub-agent
 
-Use the `delegate` tool to spawn a sub-session. Set the model to `openai-codex/gpt-5.5` with `max` thinking level. Pass the **entire review prompt below** with the diff inserted as the delegation prompt.
+Use the `delegate` tool to spawn a sub-session with the current session's model settings. Pass the **entire review prompt below** with the diff inserted as the delegation prompt.
 
 The delegate call should look like:
 
 ```
-delegate(
-  prompt: "<the full review prompt below with diff inserted>",
-  model: "gpt-5.5",
-  provider: "openai-codex",
-  thinkingLevel: "max"
-)
+delegate(prompt: "<the full review prompt below with diff inserted>")
 ```
 
 ### 3. Build the delegation prompt
