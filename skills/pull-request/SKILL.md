@@ -1,10 +1,14 @@
 ---
 name: pull-request
-description: Open a GitHub pull request. Use this skill whenever asked to create a PR, submit a PR, or push changes for review.
+description: Open a GitHub pull request. Use only when the user explicitly asks to create, open, or submit a pull request. Do not use for requests to commit or push changes unless the user also explicitly requests a pull request.
 disable-model-invocation: true
 ---
 
 # Opening a Pull Request
+
+## Scope guard
+
+This skill authorizes a pull-request workflow only when the user explicitly asks for a pull request. A request to commit changes, push a branch, or "commit & push current changes" does not authorize opening or preparing a pull request. Handle those Git operations directly without invoking this skill.
 
 Follow every step below in order before opening a PR.
 
@@ -74,49 +78,36 @@ Wait for their answer. Do **not** request a reviewer without confirmation.
 
 If the change adds or modifies user-visible views, use `agent-browser` to capture 1–3 screenshots that clearly demonstrate the new behavior. Choose representative states and viewport sizes rather than documenting every screen.
 
-### Use the released GitHub CLI attachment support
+### Publish screenshots with GitHub CLI attachments
 
-File attachments are officially available in GitHub CLI **v2.99.0 and newer**, as announced in [`cli/cli#13256`](https://github.com/cli/cli/issues/13256#issuecomment-5500144244). Before opening a visible-change PR, verify that the active stable binary supports `--attach`:
+Keep PR screenshots, recordings, and other QA evidence outside the repository in thread storage. A request to include media in a PR means uploading attachments, not adding or committing media files to the repository. Never commit QA media unless the user explicitly asks for those files to be added to the repository.
 
-```bash
-which gh
-gh version
-gh pr create --help | grep -- --attach
-```
+Use the executor MCP GitHub connection for everything except media uploads. Before using `execute`, read executor's `skills({ name: "execute" })` documentation. Discover tools with `tools.search({ query: "github <intent>" })` or saved connections with `tools.executor.coreTools.connections.list({})`. Inspect the selected schema with `tools.describe.tool({ path })`, then call the full discovered connection path. Check the result for errors and follow pagination when needed. Report connection or capability blockers instead of substituting GitHub CLI. Use read-only tools for investigation; remote writes require authorization for the specific task. Authorization for a complete workflow covers its necessary remote writes; do not ask again for each step.
 
-This machine keeps the current stable release at `/home/ashley/.pi/agent/bin/gh`, which is first on `PATH`, and `/home/ashley/.local/bin/gh`. If `gh` is older than v2.99.0 or lacks `--attach`, update it from the official [GitHub CLI releases](https://github.com/cli/cli/releases/latest), then re-run the checks. Do not seek preview artifacts or build an unreleased branch.
-
-Only report uploading as blocked if updating/running the released CLI or authenticating the upload actually fails.
-
-Add descriptive Markdown image references to the PR body, then attach each referenced local file with `gh pr create --attach`, following the [released GitHub CLI attachment workflow](https://github.com/cli/cli/issues/13256#issuecomment-5500144244). Pass each referenced local file with a matching `--attach` flag. You may also provide image alt text after `#`, such as `--attach './order-lookup-results.png#Order lookup results'`:
-
-```markdown
-## Screenshots
-
-![New order lookup results](./order-lookup-results.png)
-```
-
-Skip screenshots only when they are not applicable, such as API-only, background-job, or documentation changes. If a PR was already opened before screenshots were attached, update it with the released CLI rather than leaving the images local:
+Executor cannot upload images or videos, so upload screenshots with GitHub CLI. From the thread-storage directory that holds the screenshots, run:
 
 ```bash
-gh pr edit <number> --body-file pr-body.md \
-  --attach ./screenshot-1.png \
-  --attach ./screenshot-2.png
+gh pr edit <number> --repo <owner>/<repo> --body-file <body.md> --attach './<file>.png#<alt text>'
 ```
+
+Repeat `--attach` for each screenshot. In the body file's `Screenshots` section, reference each image with a relative path that exactly matches its `--attach` path, e.g. `![alt](./shot.png)`, so gh rewrites each reference in place with the uploaded `github.com/user-attachments` URL.
+
+After uploading, read the PR back through executor and confirm the body contains `github.com/user-attachments` URLs and no local paths.
+
+If the gh upload fails, keep the original screenshots in thread storage, list their paths in the PR body, and report the failure. An upload failure is not authorization to add or commit media to the repository.
+
+Skip screenshots when they are not applicable, such as API-only, background-job, or documentation changes.
 
 ## 7. Open the PR
 
-```bash
-gh pr create \
-  --base <base-branch> \
-  --title "<concise title>" \
-  --body-file pr-body.md \
-  [--attach ./screenshot-1.png --attach ./screenshot-2.png] \
-  [--reviewer "willtcarey"]   # only if user said yes in step 5
-```
+Discover and describe the executor GitHub PR-creation tool. Submit the resolved owner/repository, base branch from step 3, current pushed head branch, concise title, and complete Markdown body as structured arguments matching its schema. Verify the returned PR URL. Opening a PR is authorized only by the user's explicit PR request under this skill's scope guard.
+
+If the user approved a reviewer in step 5, discover and describe the review-request tool and request that reviewer after creation. Do not request a reviewer otherwise. Do not merge or make unrelated remote changes.
+
+Executor can't upload media, so attach screenshots after creating the PR with `gh pr edit ... --attach` as described in step 6.
 
 ### Base branch
-Always set `--base` to the resolved base branch from step 3. Do not use `main` unless step 3 specifically resolved the base branch to `main`.
+Always set the base to the resolved branch from step 3. Use `main` only when step 3 resolves it to `main`.
 
 ### Title
 Use a clear, concise title. Include the issue number if there is one, e.g.:
@@ -126,5 +117,5 @@ Use a clear, concise title. Include the issue number if there is one, e.g.:
 Include:
 - A summary of what changed and why
 - `Fixes #<issue-number>` (or `Closes #<issue-number>`) to auto-close the GitHub issue when merged — ask the user for the issue number if you don't know it
-- A `Screenshots` section with 1–3 attached images when the change adds or modifies visible views
+- A `Screenshots` section with 1–3 embedded images that have descriptive alt text and a one-line caption each, when the change adds or modifies visible views
 - Any notes about pre-existing test failures or known limitations

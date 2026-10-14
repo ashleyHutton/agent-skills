@@ -42,9 +42,9 @@ Never discard, overwrite, or silently stash existing work. If uncommitted change
 
 ## 2. Read the issue
 
-```bash
-gh issue view <number> --repo <owner>/<repo> --comments
-```
+Use the executor MCP GitHub connection. Before using `execute`, read executor's `skills({ name: "execute" })` documentation. Discover tools with `tools.search({ query: "github <intent>" })` or saved connections with `tools.executor.coreTools.connections.list({})`. Inspect the selected schema with `tools.describe.tool({ path })`, then call the full discovered connection path. Check the result for errors and follow pagination when needed. Report connection or capability blockers instead of substituting GitHub CLI. Use read-only tools for investigation; remote writes require authorization for the specific task. Authorization for a complete workflow covers its necessary remote writes; do not ask again for each step.
+
+Discover the issue-read and issue-comment tools. Retrieve the issue by owner, repository, and issue number, then read every comment across all pages. Read linked PRs through the same connection when relevant.
 
 Read the complete issue and every comment. Identify:
 

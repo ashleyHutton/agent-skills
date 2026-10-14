@@ -27,9 +27,9 @@ Everhour identifies GitHub issues by their **GitHub issue ID** (not the issue nu
 
 To get the GitHub issue ID from an issue number:
 
-```bash
-gh api repos/<owner>/<repo>/issues/<number> --jq '.id'
-```
+Use the executor MCP GitHub connection. Before using `execute`, read executor's `skills({ name: "execute" })` documentation. Discover tools with `tools.search({ query: "github <intent>" })` or saved connections with `tools.executor.coreTools.connections.list({})`. Inspect the selected schema with `tools.describe.tool({ path })`, then call the full discovered connection path. Check the result for errors and follow pagination when needed. Report connection or capability blockers instead of substituting GitHub CLI. Use read-only tools for investigation; remote writes require authorization for the specific task. Authorization for a complete workflow covers its necessary remote writes; do not ask again for each step.
+
+Discover the issue-read tool and retrieve the issue by owner, repository, and issue number. Use its numeric GitHub issue `id`, not the issue number or GraphQL node ID.
 
 Then the Everhour task ID is `gh:<that_id>`.
 
@@ -86,7 +86,7 @@ curl -s -X DELETE \
 ## Workflow
 
 1. Get the GitHub issue number from context (e.g., issue #591)
-2. Look up the GitHub issue ID: `gh api repos/<owner>/<repo>/issues/<number> --jq '.id'`
+2. Look up the numeric GitHub issue ID through the executor GitHub issue-read tool as described above.
 3. Use the date specified by the user. If no date is specified, assume today in Central Time (`TZ=America/Chicago date +%F`) without asking for confirmation.
 4. Read the API key: `EVERHOUR_API_KEY=$(cat ~/.config/everhour/api_key | tr -d '[:space:]')`
 5. POST the time entry

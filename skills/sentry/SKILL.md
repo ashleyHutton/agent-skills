@@ -1,81 +1,65 @@
 ---
 name: sentry
-description: Read Sentry issues, events, stack traces, breadcrumbs, tags, and activity via the Sentry REST API. Use whenever the user mentions a Sentry issue, error report, exception, stack trace from production, or pastes a sentry.io URL/short ID like CPPR-INSTITUTE-97.
+description: Read Sentry issues, events, stack traces, breadcrumbs, tags, and activity through the Sentry integration in the executor MCP server. Use whenever the user mentions a Sentry issue, error report, exception, stack trace from production, or pastes a sentry.io URL/short ID like CPPR-INSTITUTE-97.
 ---
 
 # sentry
 
-Read-only access to Sentry issues via a `curl`+`jq` wrapper around the Sentry REST API. Use this instead of asking the user to paste stack traces — you can fetch them directly.
+Sentry is a connected integration (`sentry_io`) in the globally configured `executor` MCP server (`https://executor.brandnewops.com/mcp`). Use executor's `execute` tool, which runs TypeScript with access to `tools.sentry_io.*`. Use this instead of asking the user to paste stack traces — you can fetch them directly.
 
-The wrapper script lives at `~/.agents/skills/sentry/sentry.sh`. Auth token is read from `~/.config/sentry/token` (chmod 600). Override with `SENTRY_AUTH_TOKEN` or `SENTRY_HOST` env vars if needed.
+## Discover tools
+
+Tools live under `tools.sentry_io.org.workspaceSentryMcp.<tool_name>`. Search and describe them before calling one whose arguments you don't know:
+
+```ts
+const { items } = await tools.search({ namespace: "sentry_io", query: "issue events", limit: 20 });
+const details = await tools.describe.tool({ path: "sentry_io.org.workspaceSentryMcp.get_sentry_resource" });
+return { paths: items.map(i => i.path), input: details.inputTypeScript };
+```
+
+Call a tool and branch on the result union:
+
+```ts
+const result = await tools.sentry_io.org.workspaceSentryMcp.get_sentry_resource({ url: "https://brand-new-box.sentry.io/issues/7394000711/" });
+if (!result.ok) return result.error;
+return result.data;
+```
+
+Call `skills({ name: "execute" })` on the executor server for the full `execute` guide.
 
 ## Known orgs
 
 - `brand-new-box`
 - `label-genius`
 
-Run `sentry.sh orgs` to confirm, or `sentry.sh projects <org>` to list projects.
+Use `find_organizations` to confirm, or `find_projects` to list projects.
+
+## Common tools
+
+- `get_sentry_resource` — fetch an issue, event, trace, replay, or monitor by URL (preferred) or by `resourceType` + `resourceId`.
+- `search_issues` — grouped issues for an org, using natural language or Sentry search syntax.
+- `search_errors`, `search_logs`, `search_traces`, `search_replays` — search individual events and telemetry.
+- `find_organizations`, `find_projects` — discover slugs.
+- `search_sentry_tools` / `execute_sentry_tool` — reach Sentry tools not exposed directly, such as tag distributions or issue activity.
+- `analyze_issue_with_seer` — Sentry's AI root-cause analysis. Only run when the user asks.
 
 ## Identifying issues from URLs / short IDs
 
 When the user shares something like:
 
-- `https://brand-new-box.sentry.io/issues/7394000711/` → org=`brand-new-box`, id=`7394000711`
+- `https://brand-new-box.sentry.io/issues/7394000711/` → pass the URL straight to `get_sentry_resource`
 - `https://brand-new-box.sentry.io/organizations/brand-new-box/issues/7394000711/` → same
-- A short ID like `CPPR-INSTITUTE-97` → search for it: `sentry.sh search brand-new-box CPPR-INSTITUTE-97` and pull the numeric `id` from the result
-
-The numeric issue ID is what every other command takes.
-
-## Commands
-
-All commands return trimmed JSON by default (just the fields you usually need). Append `--full` to `issue`, `event`, or `events` for the raw API response.
-
-```bash
-# List orgs and projects
-sentry.sh orgs
-sentry.sh projects brand-new-box
-
-# Issue metadata (title, level, counts, project, assignee)
-sentry.sh issue brand-new-box 7394000711
-
-# Latest event — THIS IS THE MAIN ONE.
-# Returns: tags, user, contexts (runtime/os/browser/trace), request, full
-# exception chain with stack frames (filename, function, lineno, contextLine,
-# preContext, postContext, vars), and breadcrumbs.
-sentry.sh event brand-new-box 7394000711
-
-# All recent events for an issue (ids + timestamps)
-sentry.sh events brand-new-box 7394000711
-
-# Tag distribution (which browsers/users/releases are affected)
-sentry.sh tags brand-new-box 7394000711
-
-# Comments, status changes, assignments
-sentry.sh activity brand-new-box 7394000711
-
-# Grouping hashes
-sentry.sh hashes brand-new-box 7394000711
-
-# Search issues with Sentry's query language
-sentry.sh search brand-new-box 'is:unresolved level:error project:cppr-institute'
-sentry.sh search brand-new-box 'CPPR-INSTITUTE-97'
-
-# Arbitrary GET against any Sentry API path
-sentry.sh raw /api/0/organizations/brand-new-box/projects/
-```
+- A short ID like `CPPR-INSTITUTE-97` → `get_sentry_resource({ resourceType: "issue", resourceId: "CPPR-INSTITUTE-97", organizationSlug: "brand-new-box" })`, or find it with `search_issues`
 
 ## Typical workflow when investigating an issue
 
-1. Resolve to a numeric ID (`search` if you only have a short ID/URL).
-2. `sentry.sh issue <org> <id>` to confirm what it is.
-3. `sentry.sh event <org> <id>` to get the stack trace, breadcrumbs, request context, and user. This is usually all you need to start debugging.
-4. If the trimmed view is missing something, re-run with `--full`.
-5. `sentry.sh tags <org> <id>` if you suspect the bug is browser/release/env-specific.
-6. `sentry.sh events <org> <id>` if you need to compare multiple occurrences.
+1. `get_sentry_resource` with the URL or short ID to get the issue, stack trace, breadcrumbs, request context, and user. This is usually all you need to start debugging.
+2. Follow the event's trace ID with `get_sentry_resource({ resourceType: "trace", ... })` if the failure spans services.
+3. Use `search_errors` to compare multiple occurrences, or `execute_sentry_tool` for tag distributions if you suspect the bug is browser/release/env-specific.
 
 ## Search query syntax (cheat sheet)
 
-Sentry's query language, useful with `sentry.sh search`:
+Sentry's query language, useful with `search_issues` and `search_errors`:
 
 - `is:unresolved`, `is:resolved`, `is:ignored`
 - `level:error`, `level:warning`, `level:info`, `level:fatal`
@@ -88,9 +72,10 @@ Sentry's query language, useful with `sentry.sh search`:
 - `<freeform text>` matches title/message
 - Combine with spaces (AND): `is:unresolved level:error project:web environment:production`
 
-## Notes
+## Permission for actions
 
-- The token is a Sentry User Auth Token with `org:read`, `project:read`, `event:read` scopes. It is stored at `~/.config/sentry/token`.
-- The script depends on `jq` (installed at `~/.local/bin/jq`). Without `jq` it still works but returns raw JSON.
-- Pi has no native MCP support, so this skill replaces what `sentry-mcp` would provide. The same Sentry API endpoints back both.
-- Read-only by design. No commands here mutate Sentry state (no resolve/assign/comment). Add them if needed.
+Reading needs no extra permission. **Ask the user for explicit confirmation before any call that changes Sentry state**, such as `update_issue` (resolve, ignore, assign) or any write run through `execute_sentry_tool`.
+
+## Authentication and failures
+
+Executor holds the Sentry connection; never try to read or expose its credentials. If the `executor` MCP server reports an authentication failure, tell the user to run `claude mcp login executor --no-browser` (Claude Code) or `codex mcp login executor` (Codex). If the Sentry integration inside executor fails, report the exact error and check `tools.executor.coreTools.connections.list({})`.

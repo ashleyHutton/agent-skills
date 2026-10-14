@@ -1,44 +1,55 @@
 ---
 name: daily-summary
-description: Summarize a day's work across all REINS projects — tasks completed, time estimates, and session activity. Use when the user asks for a daily summary, work log, standup notes, or what they accomplished.
+description: Summarize a day's work across BB projects and personal threads, including active threads, time estimates, linked GitHub issues, and pull requests. Use when the user asks for a daily summary, work log, standup notes, or what they accomplished.
 ---
 
 # Daily Summary
 
-Generates a summary of all work done across REINS projects for a given day, including task status, estimated active time per task, and a timeline.
+Generate a summary of work recorded in BB for a given day. Include standard
+projects, personal threads, child threads, and archived threads with activity.
 
-## How to Run
+## Run
 
-Run the Python script below via bash. Default is today; pass a date argument for a different day.
+Run the bundled script with bash. It defaults to today in the machine's local
+timezone; pass an ISO date for another day.
 
 ```bash
 daily-summary [YYYY-MM-DD]
 ```
 
-The script is symlinked to `~/.local/bin/daily-summary` for CLI use. Source lives at `~/.agents/skills/daily-summary/summary.py`.
+The executable is symlinked at `~/.local/bin/daily-summary`. Its source is the
+`summary.py` file next to this `SKILL.md`.
 
-The script outputs structured markdown. Present it directly to the user.
+Present the script's structured Markdown directly to the user. If it reports a
+warning for a thread, retain that warning so the user knows the summary may be
+incomplete.
 
-## What It Reports
+## Data and Output
 
-1. **Overview** — total tasks worked, completed, and estimated active hours
-2. **Task breakdown** — each task with project, status, message count, time window, estimated active time, linked GitHub issues, and PRs
-3. **Timeline** — chronological view of when work happened on each task, with issue/PR links
-4. **Scratch sessions** — non-task conversations summarized separately
+The script uses the authenticated `bb` CLI as its only activity source:
 
-GitHub issues are discovered from task titles (e.g. `#408`) and PR bodies (`Fixes #123`). PRs are looked up by branch name via the `gh` CLI. This makes it easy to cross-reference with Everhour or other time tracking — every issue that was touched is surfaced with a direct link.
+- `bb project list` identifies project names and GitHub repositories.
+- Current and archived `bb thread list` results identify candidate threads.
+- `bb thread log --all` supplies timestamps for user prompts and completed
+  agent actions.
+- `bb thread show` supplies pull-request state from the thread environment.
 
-## Time Estimation Method
+The report contains an overview, per-thread breakdown, chronological timeline,
+GitHub issue links found in thread titles/prompts, and associated pull requests.
+Personal BB conversations appear under the `personal` project. Merged pull
+requests count as completed delivery; BB thread status itself is shown only as
+current activity state because idle does not mean completed.
 
-Active time is estimated from message timestamps:
-- Messages within **5 minutes** of each other are considered part of the same "work window"
-- Gaps longer than 5 minutes are treated as idle (context switch, thinking, or away)
-- The sum of all work windows is the estimated active time for that task/session
+## Time Estimate
 
-This is an approximation — it captures agent-active time, not total human thinking time. It tends to **underestimate** since it doesn't count time the user spends reading output, testing in the browser, etc.
+Activity events within five minutes of one another form a work window. Longer
+gaps are idle. The sum of the windows is estimated active time. This measures
+BB-recorded user and agent activity and excludes time spent reading, manually
+testing, thinking offline, or working outside BB.
 
-## Notes
+## Failure Handling
 
-- Data comes from the REINS SQLite database at `~/reins/.reins/reins.db`
-- Only includes sessions with message activity on the target date
-- Tasks that span multiple days only show the activity from the requested day
+- If `bb` is missing, unauthenticated, or unavailable, report the script error.
+- If one thread cannot be read, include the remaining activity and preserve the
+  warning printed by the script.
+- Do not fall back to the REINS SQLite database; BB is the source of truth.

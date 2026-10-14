@@ -1,6 +1,6 @@
 # Agent Skills
 
-Reusable skills for AI agent workflows (Claude Code, REINS, etc.).
+Reusable skills for AI agent workflows (Claude Code, Codex, etc.).
 
 Each skill is a self-contained directory with a `SKILL.md` that teaches an AI agent how to perform a specific task. Drop them into your `~/.agents/skills/` directory and reference them from your project's `AGENTS.md`.
 
@@ -9,13 +9,14 @@ Each skill is a self-contained directory with a `SKILL.md` that teaches an AI ag
 | Skill | Description |
 |-------|-------------|
 | [agent-browser](skills/agent-browser/) | Headless browser automation via `agent-browser` CLI — DOM inspection, accessibility audits, screenshots, form testing |
+| [circleci-mcp](skills/circleci-mcp/) | Inspect CircleCI runs, jobs, logs, and tests through the executor MCP server |
 | [code-review](skills/code-review/) | Review correctness and codebase design using a delegated GPT 5.5 sub-agent with max reasoning |
 | [dip](skills/dip/) | Docker Compose development workflows via the `dip` CLI |
 | [everhour](skills/everhour/) | Log time to Everhour against GitHub issues |
 | [github-issue](skills/github-issue/) | Full workflow for GitHub issues — read, analyze, plan, implement with red-green-refactor |
 | [pull-request](skills/pull-request/) | Open a GitHub PR with changelog, tests, rebase, and reviewer assignment |
 | [qa-handoff](skills/qa-handoff/) | Prepare test data and browser links for manual QA verification |
-| [sentry](skills/sentry/) | Read Sentry issues, stack traces, and breadcrumbs via the REST API |
+| [sentry](skills/sentry/) | Read Sentry issues, stack traces, and breadcrumbs through the executor MCP server |
 
 ## Installation
 
@@ -36,7 +37,6 @@ cp -r agent-skills/skills/sentry ~/.agents/skills/
 Some skills read secrets from files at runtime (never hardcoded):
 
 - **everhour**: API key at `~/.config/everhour/api_key`
-- **sentry**: Auth token at `~/.config/sentry/token`
 
 Create these files and `chmod 600` them before using those skills.
 

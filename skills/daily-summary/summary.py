@@ -1,327 +1,337 @@
 #!/usr/bin/env python3
-"""Daily work summary from the REINS database."""
+"""Generate a daily work summary from BB thread activity."""
 
 from __future__ import annotations
 
 import json
 import re
-import sqlite3
 import subprocess
 import sys
-from collections import defaultdict
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime, time, timedelta
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-DB_PATH = Path.home() / "reins" / ".reins" / "reins.db"
+
 IDLE_THRESHOLD = timedelta(minutes=5)
-GH_TIMEOUT = 10
+BB_TIMEOUT = 60
+MAX_WORKERS = 8
 
 
-def parse_ts(ts: str) -> datetime:
-    """Parse an ISO timestamp from the DB."""
-    ts = ts.replace("Z", "+00:00")
-    for fmt in ("%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"):
-        try:
-            return datetime.strptime(ts, fmt)
-        except ValueError:
-            continue
-    return datetime.fromisoformat(ts.replace("Z", "").split("+")[0])
+def bb_json(args: List[str]) -> Any:
+    """Run a BB CLI command and decode its JSON output."""
+    try:
+        result = subprocess.run(
+            ["bb", *args, "--json"], capture_output=True, text=True, timeout=BB_TIMEOUT
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("the bb CLI is not installed or not on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"bb {' '.join(args)} timed out") from exc
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        raise RuntimeError(f"bb {' '.join(args)} failed: {detail}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"bb {' '.join(args)} returned invalid JSON") from exc
+
+
+def local_datetime(milliseconds: int) -> datetime:
+    """Convert BB epoch milliseconds into a timezone-aware local datetime."""
+    return datetime.fromtimestamp(milliseconds / 1000).astimezone()
+
+
+def day_bounds(target: date) -> Tuple[datetime, datetime]:
+    # Converting naive local midnights lets the OS apply the UTC offset that
+    # was in effect on the requested date, including daylight-saving changes.
+    start = datetime.combine(target, time.min).astimezone()
+    end = datetime.combine(target + timedelta(days=1), time.min).astimezone()
+    return start, end
 
 
 def estimate_active_time(timestamps: List[datetime]) -> timedelta:
-    """Estimate active work time from sorted message timestamps.
-
-    Messages within IDLE_THRESHOLD of each other form a work window.
-    Gaps beyond that are treated as idle.
-    """
+    """Estimate active time by splitting activity at gaps over five minutes."""
     if len(timestamps) < 2:
         return timedelta(minutes=1) if timestamps else timedelta()
 
     total = timedelta()
     window_start = timestamps[0]
-    prev = timestamps[0]
-
-    for ts in timestamps[1:]:
-        if ts - prev > IDLE_THRESHOLD:
-            total += prev - window_start + timedelta(seconds=30)
-            window_start = ts
-        prev = ts
-
-    total += prev - window_start + timedelta(seconds=30)
-    return total
+    previous = timestamps[0]
+    for timestamp in timestamps[1:]:
+        if timestamp - previous > IDLE_THRESHOLD:
+            total += previous - window_start + timedelta(seconds=30)
+            window_start = timestamp
+        previous = timestamp
+    return total + previous - window_start + timedelta(seconds=30)
 
 
-def fmt_duration(td: timedelta) -> str:
-    total_minutes = int(td.total_seconds() / 60)
+def fmt_duration(duration: timedelta) -> str:
+    total_minutes = int(duration.total_seconds() / 60)
     if total_minutes < 1:
         return "<1m"
     hours, minutes = divmod(total_minutes, 60)
-    return f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+    return f"{hours}h {minutes}m" if hours else f"{minutes}m"
 
 
-def fmt_time(ts: datetime) -> str:
-    return ts.strftime("%H:%M")
+def fmt_time(timestamp: datetime) -> str:
+    return timestamp.strftime("%H:%M")
 
 
-def gh_run(args: List[str], cwd: str) -> Optional[str]:
-    """Run a gh CLI command, return stdout or None on failure."""
-    try:
-        result = subprocess.run(
-            ["gh"] + args,
-            capture_output=True, text=True, cwd=cwd, timeout=GH_TIMEOUT,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    except Exception:
-        pass
-    return None
+def thread_title(thread: Dict[str, Any]) -> str:
+    return thread.get("title") or thread.get("titleFallback") or "Untitled thread"
 
 
-def get_repo_url(project_path: str) -> Optional[str]:
-    """Get the GitHub repo URL for a project."""
-    out = gh_run(["repo", "view", "--json", "url"], cwd=project_path)
-    if out:
-        try:
-            return json.loads(out).get("url")
-        except (json.JSONDecodeError, KeyError):
-            pass
-    return None
+def meaningful_event(event: Dict[str, Any]) -> bool:
+    """Select user prompts and completed agent actions, excluding stream noise."""
+    event_type = event.get("type")
+    if event_type == "client/turn/requested":
+        return True
+    if event_type != "item/completed":
+        return False
+    item_type = event.get("data", {}).get("item", {}).get("type")
+    return item_type not in {None, "reasoning", "contextCompaction"}
 
 
-def get_pr_info(branch: str, project_path: str) -> Optional[Dict]:
-    """Look up a PR by head branch. Returns {number, url, state} or None."""
-    out = gh_run(
-        ["pr", "list", "--head", branch, "--state", "all",
-         "--json", "number,url,state,body"],
-        cwd=project_path,
-    )
-    if not out or out == "[]":
+def extract_text(event: Dict[str, Any]) -> str:
+    if event.get("type") != "client/turn/requested":
+        return ""
+    blocks = event.get("data", {}).get("input", [])
+    return " ".join(block.get("text", "") for block in blocks if isinstance(block, dict))
+
+
+def github_repo_url(remote: Optional[str]) -> Optional[str]:
+    if not remote:
         return None
-    try:
-        prs = json.loads(out)
-        if prs:
-            pr = prs[0]
-            # Extract linked issues from PR body
-            body = pr.get("body") or ""
-            linked = re.findall(
-                r"(?:Fixes|Closes|Resolves)\s+#(\d+)", body, re.IGNORECASE
-            )
-            return {
-                "number": pr["number"],
-                "url": pr["url"],
-                "state": pr["state"],
-                "linked_issues": linked,
+    match = re.search(r"github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$", remote)
+    if not match:
+        return None
+    return f"https://github.com/{match.group(1)}/{match.group(2)}"
+
+
+def issue_links(title: str, prompt_text: str, repo_url: Optional[str]) -> List[str]:
+    """Find issue references in titles and prompts, preferring explicit URLs."""
+    links: Dict[str, str] = {}
+    combined = f"{title}\n{prompt_text}"
+    for owner, repo, number in re.findall(
+        r"https://github\.com/([^/\s]+)/([^/\s]+)/issues/(\d+)", combined
+    ):
+        links[number] = f"https://github.com/{owner}/{repo}/issues/{number}"
+    if repo_url:
+        # Bare issue numbers in copied workflow text and code examples are noisy.
+        # Only trust bare references in the thread title; explicit URLs are safe
+        # to collect from prompts as well.
+        for number in re.findall(r"(?<![\w/])#(\d+)", title):
+            links.setdefault(number, f"{repo_url}/issues/{number}")
+    return [f"[#{number}]({url})" for number, url in links.items()]
+
+
+def list_all_threads() -> List[Dict[str, Any]]:
+    """Return current and archived threads without duplicates."""
+    threads: Dict[str, Dict[str, Any]] = {}
+    for args in (
+        ["thread", "list", "--include-hidden"],
+        ["thread", "list", "--archived", "--include-hidden"],
+    ):
+        for thread in bb_json(args):
+            threads[thread["id"]] = thread
+    return list(threads.values())
+
+
+def load_thread(thread: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    details = bb_json(["thread", "show", thread["id"]])
+    events = bb_json(["thread", "log", thread["id"], "--all"])
+    return details, events
+
+
+def candidate_threads(
+    threads: Iterable[Dict[str, Any]], start: datetime, end: datetime
+) -> List[Dict[str, Any]]:
+    """Use metadata to avoid downloading logs that cannot touch the day."""
+    start_ms = int(start.timestamp() * 1000)
+    end_ms = int(end.timestamp() * 1000)
+    return [
+        thread
+        for thread in threads
+        if thread.get("createdAt", end_ms) < end_ms
+        and thread.get("updatedAt", 0) >= start_ms
+    ]
+
+
+def collect_entries(target: date) -> Tuple[List[Dict[str, Any]], List[str]]:
+    projects = {project["id"]: project for project in bb_json(["project", "list"])}
+    start, end = day_bounds(target)
+    threads = candidate_threads(list_all_threads(), start, end)
+    loaded: Dict[str, Tuple[Dict[str, Any], List[Dict[str, Any]]]] = {}
+    warnings: List[str] = []
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(load_thread, thread): thread for thread in threads}
+        for future in as_completed(futures):
+            thread = futures[future]
+            try:
+                loaded[thread["id"]] = future.result()
+            except RuntimeError as exc:
+                warnings.append(f"Could not read {thread_title(thread)}: {exc}")
+
+    entries = []
+    for thread in threads:
+        loaded_thread = loaded.get(thread["id"])
+        if not loaded_thread:
+            continue
+        details, events = loaded_thread
+        selected = [
+            event
+            for event in events
+            if meaningful_event(event)
+            and start <= local_datetime(event["createdAt"]) < end
+        ]
+        if not selected:
+            continue
+
+        timestamps = sorted(local_datetime(event["createdAt"]) for event in selected)
+        project = projects.get(thread.get("projectId"), {})
+        project_name = project.get("name") or (
+            "personal" if thread.get("projectId") == "proj_personal" else "unknown"
+        )
+        environment = details.get("environment") or {}
+        pull_request = (environment.get("pullRequest") or {}).get("pullRequest")
+        if thread.get("visibility") == "hidden":
+            # Hidden eval/helper threads can share a parent environment. The PR
+            # belongs to the visible delivery thread, not every helper thread.
+            pull_request = None
+        repo_url = github_repo_url(project.get("gitRemoteUrl"))
+        title = thread_title(thread)
+        prompts = " ".join(extract_text(event) for event in selected)
+        entries.append(
+            {
+                "id": thread["id"],
+                "project": project_name,
+                "title": title,
+                "status": thread.get("status", "unknown"),
+                "parent_id": thread.get("parentThreadId"),
+                "event_count": len(selected),
+                "first": timestamps[0],
+                "last": timestamps[-1],
+                "active_time": estimate_active_time(timestamps),
+                "issues": issue_links(title, prompts, repo_url),
+                "pull_request": pull_request,
             }
-    except (json.JSONDecodeError, KeyError, IndexError):
-        pass
-    return None
-
-
-def extract_issue_numbers(title: str) -> List[str]:
-    """Pull issue numbers like #123 from a task title."""
-    return re.findall(r"#(\d+)", title)
-
-
-def main():
-    target_date = (
-        sys.argv[1] if len(sys.argv) > 1
-        else datetime.now().strftime("%Y-%m-%d")
-    )
-
-    if not DB_PATH.exists():
-        print(f"Error: REINS database not found at {DB_PATH}")
-        sys.exit(1)
-
-    db = sqlite3.connect(str(DB_PATH))
-    db.row_factory = sqlite3.Row
-
-    # ── Collect messages ──────────────────────────────────────────────
-    rows = db.execute("""
-        SELECT
-            sm.created_at, sm.role,
-            s.id as session_id, s.task_id,
-            t.title as task_title, t.status as task_status, t.branch_name,
-            p.name as project, p.path as project_path
-        FROM session_messages sm
-        JOIN sessions s ON sm.session_id = s.id
-        LEFT JOIN tasks t ON s.task_id = t.id
-        JOIN projects p ON s.project_id = p.id
-        WHERE date(sm.created_at) = ?
-        ORDER BY sm.created_at
-    """, (target_date,)).fetchall()
-
-    if not rows:
-        print(f"# Daily Summary — {target_date}\n")
-        print("No activity found for this date.")
-        return
-
-    # ── Group by task / scratch session ───────────────────────────────
-    groups = defaultdict(lambda: {
-        "project": "", "project_path": "", "title": "", "status": "",
-        "branch": "", "is_scratch": False, "timestamps": [], "msg_count": 0,
-    })
-
-    for r in rows:
-        if r["task_id"]:
-            key = f"task-{r['task_id']}"
-            title = r["task_title"]
-            is_scratch = False
-            status = r["task_status"]
-            branch = r["branch_name"] or ""
-        else:
-            key = f"scratch-{r['session_id']}"
-            title = "(scratch session)"
-            is_scratch = True
-            status = ""
-            branch = ""
-
-        g = groups[key]
-        g["project"] = r["project"]
-        g["project_path"] = r["project_path"]
-        g["title"] = title
-        g["status"] = status
-        g["branch"] = branch
-        g["is_scratch"] = is_scratch
-        g["timestamps"].append(parse_ts(r["created_at"]))
-        g["msg_count"] += 1
-
-    # ── Build entries with timing ─────────────────────────────────────
-    tasks = []
-    scratches = []
-    total_active = timedelta()
-
-    for key, g in groups.items():
-        ts = sorted(g["timestamps"])
-        active = estimate_active_time(ts)
-        total_active += active
-
-        entry = {
-            "project": g["project"],
-            "project_path": g["project_path"],
-            "title": g["title"],
-            "status": g["status"],
-            "branch": g["branch"],
-            "msg_count": g["msg_count"],
-            "first": ts[0],
-            "last": ts[-1],
-            "active_time": active,
-        }
-
-        if g["is_scratch"]:
-            scratches.append(entry)
-        else:
-            tasks.append(entry)
-
-    tasks.sort(key=lambda t: t["first"])
-    scratches.sort(key=lambda t: t["first"])
-    completed = [t for t in tasks if t["status"] == "closed"]
-
-    # ── Look up GitHub issues & PRs ───────────────────────────────────
-    # Cache repo URLs per project path
-    repo_urls = {}  # type: Dict[str, Optional[str]]
-
-    for t in tasks:
-        pp = t["project_path"]
-        if pp not in repo_urls:
-            repo_urls[pp] = get_repo_url(pp)
-
-        repo_url = repo_urls[pp]
-
-        # Issues referenced in title
-        title_issues = extract_issue_numbers(t["title"])
-
-        # PR lookup
-        pr = get_pr_info(t["branch"], pp) if t["branch"] else None
-
-        # Merge all issue numbers (from title + PR body), deduplicated, ordered
-        all_issues = list(dict.fromkeys(title_issues + (pr["linked_issues"] if pr else [])))
-
-        # Build issue URLs
-        issue_links = []
-        if repo_url and all_issues:
-            for num in all_issues:
-                issue_links.append(f"[#{num}]({repo_url}/issues/{num})")
-        elif all_issues:
-            issue_links = [f"#{num}" for num in all_issues]
-
-        t["pr"] = pr
-        t["issue_links"] = issue_links
-        t["issue_numbers"] = all_issues
-
-    # ── Output ────────────────────────────────────────────────────────
-    print(f"# Daily Summary — {target_date}\n")
-
-    print(
-        f"**{len(tasks)} tasks** worked on across "
-        f"**{len(set(t['project'] for t in tasks))} projects** · "
-        f"**{len(completed)} completed** · "
-        f"~**{fmt_duration(total_active)}** estimated active time\n"
-    )
-
-    # ── Task breakdown ────────────────────────────────────────────────
-    print("## Tasks\n")
-
-    for t in tasks:
-        icon = "✅" if t["status"] == "closed" else "🔵"
-        window = f"{fmt_time(t['first'])}–{fmt_time(t['last'])}"
-        title = t["title"][:80]
-
-        pr = t["pr"]
-        pr_str = ""
-        if pr:
-            state_label = pr["state"].upper()
-            pr_str = f"[PR #{pr['number']}]({pr['url']}) ({state_label})"
-
-        issues_str = ", ".join(t["issue_links"]) if t["issue_links"] else ""
-
-        print(f"### {icon} {t['project']} — {title}\n")
-        print(f"- **Active time:** {fmt_duration(t['active_time'])} · **Window:** {window} · **Messages:** {t['msg_count']}")
-        if issues_str or pr_str:
-            refs = " · ".join(filter(None, [issues_str, pr_str]))
-            print(f"- **References:** {refs}")
-        print()
-
-    # ── Timeline ──────────────────────────────────────────────────────
-    print("## Timeline\n")
-    all_entries = [(e["first"], e) for e in tasks + scratches]
-    all_entries.sort(key=lambda x: x[0])
-
-    for _, e in all_entries:
-        icon = "✅" if e["status"] == "closed" else ("💬" if not e["status"] else "🔵")
-        label = e["title"][:55]
-        pr = e.get("pr")
-        issues = e.get("issue_links", [])
-        refs = ""
-        if issues or pr:
-            parts = []
-            if issues:
-                parts.append(", ".join(issues))
-            if pr:
-                parts.append(f"[PR #{pr['number']}]({pr['url']})")
-            refs = f" — {' · '.join(parts)}"
-        print(
-            f"- **{fmt_time(e['first'])}** {icon} {e['project']} / {label} "
-            f"({fmt_duration(e['active_time'])}, {e['msg_count']} msgs){refs}"
         )
 
-    # ── Scratch sessions ──────────────────────────────────────────────
-    if scratches:
-        print("\n## Scratch Sessions\n")
-        for s in scratches:
-            window = f"{fmt_time(s['first'])}–{fmt_time(s['last'])}"
-            print(
-                f"- **{s['project']}** — {s['msg_count']} msgs, "
-                f"{fmt_duration(s['active_time'])} active ({window})"
-            )
+    entries.sort(key=lambda entry: entry["first"])
+    return entries, warnings
 
-    # ── Footer ────────────────────────────────────────────────────────
-    print(
-        f"\n---\n*Active time estimated from message timestamps. "
-        f"Gaps >{int(IDLE_THRESHOLD.total_seconds() / 60)}min treated as idle. "
-        f"Underestimates total effort (excludes reading, testing, thinking).*"
+
+def status_icon(entry: Dict[str, Any]) -> str:
+    pull_request = entry.get("pull_request") or {}
+    if pull_request.get("state", "").lower() == "merged":
+        return "✅"
+    if pull_request:
+        return "🟣"
+    if entry["status"] == "active":
+        return "🟡"
+    return "🔵"
+
+
+def reference_text(entry: Dict[str, Any]) -> str:
+    references = list(entry["issues"])
+    pull_request = entry.get("pull_request")
+    if pull_request:
+        state = pull_request.get("state", "unknown").upper()
+        references.append(
+            f"[PR #{pull_request['number']}]({pull_request['url']}) ({state})"
+        )
+    return " · ".join(references)
+
+
+def render(target: date, entries: List[Dict[str, Any]], warnings: List[str]) -> str:
+    lines = [f"# Daily Summary — {target.isoformat()}", ""]
+    if not entries:
+        lines.append("No BB activity found for this date.")
+        if warnings:
+            lines.extend(["", "## Warnings", "", *[f"- {warning}" for warning in warnings]])
+        return "\n".join(lines)
+
+    total_active = sum((entry["active_time"] for entry in entries), timedelta())
+    merged = sum(
+        1
+        for entry in entries
+        if (entry.get("pull_request") or {}).get("state", "").lower() == "merged"
     )
+    project_count = len({entry["project"] for entry in entries})
+    lines.extend(
+        [
+            f"**{len(entries)} BB threads** active across **{project_count} projects** · "
+            f"**{merged} merged PRs** · ~**{fmt_duration(total_active)}** estimated active time",
+            "",
+            "## Threads",
+            "",
+        ]
+    )
+
+    for entry in entries:
+        title = entry["title"][:100]
+        window = f"{fmt_time(entry['first'])}–{fmt_time(entry['last'])}"
+        child = " · **Child thread**" if entry["parent_id"] else ""
+        lines.extend(
+            [
+                f"### {status_icon(entry)} {entry['project']} — {title}",
+                "",
+                f"- **Active time:** {fmt_duration(entry['active_time'])} · "
+                f"**Window:** {window} · **Activity events:** {entry['event_count']}{child}",
+            ]
+        )
+        references = reference_text(entry)
+        if references:
+            lines.append(f"- **References:** {references}")
+        lines.append("")
+
+    lines.extend(["## Timeline", ""])
+    for entry in entries:
+        references = reference_text(entry)
+        suffix = f" — {references}" if references else ""
+        lines.append(
+            f"- **{fmt_time(entry['first'])}** {status_icon(entry)} "
+            f"{entry['project']} / {entry['title'][:65]} "
+            f"({fmt_duration(entry['active_time'])}, {entry['event_count']} events){suffix}"
+        )
+
+    if warnings:
+        lines.extend(["", "## Warnings", ""])
+        lines.extend(f"- {warning}" for warning in warnings)
+
+    lines.extend(
+        [
+            "",
+            "---",
+            f"*Source: BB thread event logs. Active time estimated from user and agent activity; "
+            f"gaps >{int(IDLE_THRESHOLD.total_seconds() / 60)}min are idle. "
+            "This excludes reading and offline thinking time.*",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def parse_target_date(arguments: List[str]) -> date:
+    if not arguments:
+        return datetime.now().astimezone().date()
+    try:
+        return date.fromisoformat(arguments[0])
+    except ValueError as exc:
+        raise RuntimeError("date must use YYYY-MM-DD format") from exc
+
+
+def main() -> int:
+    try:
+        target = parse_target_date(sys.argv[1:])
+        entries, warnings = collect_entries(target)
+        print(render(target, entries, warnings))
+        return 0
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
