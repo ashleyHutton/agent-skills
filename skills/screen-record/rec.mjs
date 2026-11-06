@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // rec: record a scripted browser demo to MP4, with a visible cursor, click
-// ripples, and a keystroke display.
+// ripples, a keystroke display, key and click sounds, and optional narration.
 //
-//   node rec.mjs demo.mjs -o out.mp4 [--base URL] [--size 1280x800] [--fps 60] [--scale 2] [--keep-frames]
+//   node rec.mjs demo.mjs -o out.mp4 [--base URL] [--size 1280x800] [--fps 60] [--scale 2]
+//     [--no-sound] [--narrate] [--voice bm_george] [--speed 0.95] [--keep-frames]
 //
 // A demo is a module that exports `run(r)` and optionally `setup(r)`. Setup is
 // not recorded, so use it to sign in. See the methods on Recorder below.
@@ -17,6 +18,8 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { Narrator } from "./narrator.mjs"
+import { SAMPLE_RATE, buildWav } from "./sound.mjs"
 
 // Set REC_CHROME to override. Otherwise uses the browser agent-browser is configured with.
 function chromePath() {
@@ -67,6 +70,7 @@ const OVERLAY = () => {
 
   const build = () => {
     if (root?.isConnected || !document.documentElement) return
+    document.documentElement.spellcheck = false
     const style = document.createElement("style")
     style.textContent = css
     document.documentElement.appendChild(style)
@@ -98,7 +102,9 @@ const OVERLAY = () => {
   }
 
   addEventListener("mousemove", (e) => place(e.clientX, e.clientY), true)
+  const report = (kind) => window.__recEvent?.({ kind, t: Date.now() })
   addEventListener("mousedown", (e) => {
+    report("mouse-down")
     cursor?.classList.add("down")
     const ripple = document.createElement("div")
     ripple.className = "__rec_ripple"
@@ -107,11 +113,15 @@ const OVERLAY = () => {
     root?.appendChild(ripple)
     setTimeout(() => ripple.remove(), 560)
   }, true)
-  addEventListener("mouseup", () => cursor?.classList.remove("down"), true)
+  addEventListener("mouseup", () => {
+    report("mouse-up")
+    cursor?.classList.remove("down")
+  }, true)
 
   const NAMED = { Enter: "⏎ Enter", Tab: "⇥ Tab", Escape: "Esc", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" }
   addEventListener("keydown", (e) => {
     if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return
+    if (!e.repeat) report([" ", "Enter", "Backspace", "Tab"].includes(e.key) ? "key-heavy" : "key")
     const combo = e.ctrlKey || e.metaKey || e.altKey
     if (e.key === "Backspace") {
       typed = typed.slice(0, -1)
@@ -156,9 +166,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 class Recorder {
-  constructor(page, base) {
+  constructor(page, base, narrator, events) {
     this.page = page
     this.base = base
+    this.narrator = narrator
+    this.events = events
+    this.narrationEnds = 0
     this.x = 640
     this.y = 400
     this.log = []
@@ -272,10 +285,23 @@ class Recorder {
     await sleep(200)
   }
 
-  async caption(text) {
+  // With --narrate, also speaks the text, or `say` if the spoken words should
+  // differ. Waits for the previous line, so lines never talk over each other.
+  async caption(text, { say } = {}) {
+    await this.finishNarration()
     this.step(`caption ${text}`)
+    const clip = text && this.narrator ? await this.narrator.clip(say || text) : null
     await this.page.evaluate((value) => window.__rec?.caption(value), text)
+    if (clip) {
+      this.events.push({ kind: "narration", t: Date.now(), samples: clip })
+      this.narrationEnds = Date.now() + (clip.length / SAMPLE_RATE) * 1000 + 300
+    }
     await sleep(250)
+  }
+
+  async finishNarration() {
+    const remaining = this.narrationEnds - Date.now()
+    if (remaining > 0) await sleep(remaining)
   }
 
   async pause(ms = 800) {
@@ -308,7 +334,7 @@ class Recorder {
 }
 
 function parseArgs(argv) {
-  const args = { fps: 60, scale: 2, size: "1280x800", base: "http://localhost:3000" }
+  const args = { fps: 60, scale: 2, size: "1280x800", base: "http://localhost:3000", sound: true, voice: "bm_george", speed: 0.95 }
   const rest = []
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -317,12 +343,16 @@ function parseArgs(argv) {
     else if (arg === "--size") args.size = argv[++i]
     else if (arg === "--fps") args.fps = Number(argv[++i])
     else if (arg === "--scale") args.scale = Number(argv[++i])
+    else if (arg === "--no-sound") args.sound = false
+    else if (arg === "--narrate") args.narrate = true
+    else if (arg === "--voice") args.voice = argv[++i]
+    else if (arg === "--speed") args.speed = Number(argv[++i])
     else if (arg === "--keep-frames") args.keep = true
     else rest.push(arg)
   }
   args.script = rest[0]
   if (!args.script || !args.out) {
-    console.error("usage: rec.mjs demo.mjs -o out.mp4 [--base URL] [--size 1280x800] [--fps 60] [--scale 2] [--keep-frames]")
+    console.error("usage: rec.mjs demo.mjs -o out.mp4 [--base URL] [--size 1280x800] [--fps 60] [--scale 2] [--no-sound] [--narrate] [--voice bm_george] [--speed 0.95] [--keep-frames]")
     process.exit(2)
   }
   return args
@@ -334,19 +364,29 @@ async function main() {
   const demo = await import(pathToFileURL(path.resolve(args.script)))
   const frameDir = fs.mkdtempSync(path.join(os.tmpdir(), "rec-frames-"))
 
+  let narrator
+  if (args.narrate) {
+    if (!args.sound) throw new Error("--narrate can't be combined with --no-sound")
+    narrator = await Narrator.load(args)
+    const prepared = await narrator.prepare(fs.readFileSync(args.script, "utf8"))
+    console.log(`narration: ${prepared} lines ready, voice ${args.voice}`)
+  }
+
   // Screencast frames ignore Playwright's emulated deviceScaleFactor, so real
   // sharpness needs Chrome's own flag, and no viewport override, which would
   // force the page back to 1x.
   const browser = await chromium.launch({
     executablePath: chromePath(),
     headless: true,
-    args: ["--disable-spell-checking", `--force-device-scale-factor=${args.scale}`, `--window-size=${width},${height + WINDOW_CHROME_HEIGHT}`]
+    args: [`--force-device-scale-factor=${args.scale}`, `--window-size=${width},${height + WINDOW_CHROME_HEIGHT}`]
   })
   const context = await browser.newContext({ viewport: null })
   const page = await context.newPage()
+  const events = []
+  await context.exposeFunction("__recEvent", (event) => events.push(event))
   await context.addInitScript(OVERLAY)
 
-  const r = new Recorder(page, args.base)
+  const r = new Recorder(page, args.base, narrator, events)
   const problems = []
   const actual = await page.evaluate(() => [innerWidth, innerHeight, devicePixelRatio])
   console.log(`page ${actual[0]}x${actual[1]} at ${actual[2]}x`)
@@ -374,8 +414,16 @@ async function main() {
     })
     await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: width * args.scale, maxHeight: height * args.scale, everyNthFrame: 1 })
 
+    // A still page sends no frames, and the video starts at the first one, so
+    // get that first frame now or the opening narration lands before the video.
+    await page.evaluate(() => document.documentElement.setAttribute("data-rec-started", ""))
+    await page.mouse.move(r.x, r.y)
+    for (let waited = 0; !frames.length && waited < 3000; waited += 50) await sleep(50)
+    if (!frames.length) throw new Error("Screencast sent no frames")
+
     console.log("recording")
     await demo.run(r)
+    await r.finishNarration()
     await sleep(800)
   } catch (error) {
     failure = error
@@ -397,7 +445,13 @@ async function main() {
     .join("\n")
   const listFile = path.join(frameDir, "list.txt")
   fs.writeFileSync(listFile, `${list}\nfile '${frames.at(-1).file}'\n`)
+  // The last frame is held for one second, so the audio runs that much longer too.
+  const startMs = frames[0].t * 1000
+  const videoMs = (frames.at(-1).t - frames[0].t + 1) * 1000
+  const audioFile = path.join(frameDir, "audio.wav")
+  if (args.sound) fs.writeFileSync(audioFile, buildWav(events, startMs, videoMs))
   execFileSync(ffmpegPath, ["-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listFile,
+    ...(args.sound ? ["-i", audioFile, "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "160k"] : []),
     "-vf", `fps=${args.fps},scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p`,
     "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-movflags", "+faststart", path.resolve(args.out)])
 
@@ -411,6 +465,7 @@ async function main() {
     averageCaptureFps: Number((frames.length / duration).toFixed(1)),
     medianFrameGapMs: Number((gaps[Math.floor(gaps.length / 2)] * 1000).toFixed(1)),
     outputFps: args.fps,
+    sounds: Object.fromEntries(["key", "key-heavy", "mouse-down", "mouse-up", "narration"].map((kind) => [kind, events.filter((event) => event.kind === kind && event.t >= startMs).length])),
     problems,
     failed: failure?.message ?? null
   }, null, 2))

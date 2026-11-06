@@ -1,6 +1,6 @@
 ---
 name: screen-record
-description: Record a scripted browser demo of a feature to MP4, with a visible cursor, click ripples, keystrokes, and captions. Use when the user asks for a screen recording, demo video, or walkthrough of a change, or wants video QA evidence for a PR.
+description: Record a scripted browser demo of a feature to MP4, with a visible cursor, click ripples, keystrokes, captions, key and click sounds, and optional voice narration. Use when the user asks for a screen recording, demo video, or walkthrough of a change, or wants video QA evidence for a PR.
 ---
 
 # Screen Record
@@ -17,6 +17,12 @@ npm ci || npm install
 
 It needs a current Chrome. It uses `executablePath` from `~/.agent-browser/config.json`, or set `REC_CHROME`.
 
+Narration needs a local speech model. It's large (about 800 MB with its dependencies, plus an 89 MB model on first use), so it's a separate step, run once in this skill's directory:
+
+```bash
+npm install --no-save kokoro-js
+```
+
 ## Workflow
 
 1. Get the app running and find out what data the flow needs. Recording changes data, so use a dev database, and re-seed between attempts.
@@ -27,7 +33,7 @@ It needs a current Chrome. It uses `executablePath` from `~/.agent-browser/confi
    node <skill-dir>/rec.mjs demo.mjs -o demo.mp4 --base http://localhost:3000
    ```
 
-   Options: `--size 1280x800`, `--scale 2`, `--fps 60`, `--keep-frames`.
+   Add `--narrate` to speak the captions. Options: `--voice bm_george`, `--speed 0.95`, `--no-sound`, `--size 1280x800`, `--scale 2`, `--fps 60`, `--keep-frames`.
 
 4. **Check the video before sharing it.** A passing run doesn't mean it looks right. Build a contact sheet with the bundled ffmpeg and read the image:
 
@@ -38,7 +44,8 @@ It needs a current Chrome. It uses `executablePath` from `~/.agent-browser/confi
 
    Look for: captions out of step with the page, an error page, the cursor hidden by a modal, and anything sensitive on screen. Pull a single full-size frame with `-ss <seconds> -frames:v 1` to check sharpness.
 
-5. Read the JSON summary, and report `problems`, `failed`, and `averageCaptureFps` honestly.
+5. Read the JSON summary, and report `problems`, `failed`, `sounds`, and `averageCaptureFps` honestly. The `narration` count in `sounds` should match the number of captions you wrote.
+6. You can't hear the result, so say so. You can check that speech falls where you expect with `"$FFMPEG" -i demo.mp4 -vn -af "silencedetect=noise=-38dB:d=0.35" -f null -`, but ask the user to judge how it sounds.
 
 ## Script API
 
@@ -53,18 +60,24 @@ Export `run(r)` and optionally `setup(r)`, which isn't recorded. A target is a C
 | `r.press(key)` | Presses one key, such as `"Enter"` |
 | `r.select(target, label)` | Chooses a native `<select>` option |
 | `r.scroll(deltaY)` | Scrolls smoothly with the mouse wheel |
-| `r.caption(text)` | Shows a caption at the bottom right. `""` clears it |
+| `r.caption(text, { say })` | Shows a caption at the bottom right, and speaks it with `--narrate`. `say` speaks different words. `""` clears it. Waits for the previous line to finish |
 | `r.pause(ms)` | Holds, so the viewer can read |
 | `r.settle()` | Waits for the network to go quiet |
 | `r.expectText(text, scope)` | Fails the run unless the text is visible |
 | `r.expectNoText(text, scope)` | Fails the run if the text is present |
 | `r.page` | The Playwright page, for anything else |
 
-Set a caption after a navigation finishes, or it shows over the previous page.
+Set a caption after a navigation finishes, or it shows over the previous page. With narration, write captions to be heard: short, plain sentences, and use `say` for anything that reads badly aloud. Actions carry on while a line plays, so a line can describe what's happening as it happens.
 
 ## Sharing
 
 For a GitHub PR, upload with `gh pr edit <number> --repo <owner>/<repo> --body-file <body.md> --attach './demo.mp4'`. `gh` rejects alt text on video, so leave off the `#alt` suffix. Reference it in the body as `![Demo](./demo.mp4)`, and `gh` replaces that with an embedded player URL. Read the PR back to confirm. Don't commit recordings to the repo.
+
+## Sound and narration
+
+- **Sound effects:** key and mouse sounds are on by default, synthesized in `sound.mjs` and timed from real page events, including typing a script does through `r.page`. They drop in volume under narration.
+- **Voices:** these come from [Kokoro](https://github.com/hexgrad/kokoro), which runs locally with no account or per-use cost. The default is `bm_george`, a British male voice. Others include `bm_fable`, `bm_lewis`, and `bm_daniel`, plus `am_michael` for American and `af_heart` for American female.
+- **Timing:** literal `r.caption("...")` lines are spoken before recording starts. A caption built at runtime, or one using `say`, is generated when reached, which pauses the video for a few seconds. Keep captions literal where you can.
 
 ## Notes
 
