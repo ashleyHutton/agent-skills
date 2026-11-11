@@ -1,0 +1,17 @@
+{
+  "voice": "bm_george",
+  "speed": 0.95,
+  "lead": 0.15,
+  "intro": "Hey everyone, we are excited to introduce a faster way to export reports in Acme.",
+  "scenes": [
+    { "at": "start", "until": "export_open", "text": "Here's the reports page, with this quarter's numbers." },
+    { "at": "export_open", "until": "downloaded", "text": "Pick a format, hit export, and the file is ready in a second." },
+    { "at": "downloaded", "until": "end", "text": "And every column from the screen comes along with it." }
+  ],
+  "outro": "Before this, exports took a support ticket. Now it's one click. Thanks for watching!",
+  "cards": {
+    "intro": { "eyebrow": "Acme · New feature", "title": "One-click report exports", "subtitle": "Export any report to CSV or Excel." },
+    "outro": { "eyebrow": "The result", "title": "Exports without the wait", "subtitle": "Before: a support ticket.\nAfter: one click." }
+  },
+  "theme": { "bg": "#252b4d", "fg": "#ffffff", "accent": "#8fc1ee", "muted": "#d4d9ea" }
+}

@@ -15,6 +15,7 @@ Each skill is a self-contained directory with a `SKILL.md` that teaches an AI ag
 | [everhour](skills/everhour/) | Log time to Everhour against GitHub issues |
 | [github-issue](skills/github-issue/) | Full workflow for GitHub issues — read, analyze, plan, implement with red-green-refactor |
 | [pull-request](skills/pull-request/) | Open a GitHub PR with changelog, tests, rebase, and reviewer assignment |
+| [narrated-demo](skills/narrated-demo/) | Narrated feature demo videos with intro and outro cards and a voice-over timed to each scene, built on `screen-record` |
 | [qa-handoff](skills/qa-handoff/) | Prepare test data and browser links for manual QA verification |
 | [sentry](skills/sentry/) | Read Sentry issues, stack traces, and breadcrumbs through the executor MCP server |
 
