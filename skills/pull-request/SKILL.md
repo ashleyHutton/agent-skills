@@ -74,29 +74,45 @@ Before opening the PR, ask the user:
 
 Wait for their answer. Do **not** request a reviewer without confirmation.
 
-## 6. Capture screenshots for visible changes
+## 6. Capture screenshots and a walkthrough for visible changes
 
 If the change adds or modifies user-visible views, use `agent-browser` to capture 1–3 screenshots that clearly demonstrate the new behavior. Choose representative states and viewport sizes rather than documenting every screen.
 
-### Publish screenshots with GitHub CLI attachments
+### Record a silent video walkthrough
+
+For the same user-visible UI changes, also record a short walkthrough with the `screen-record` skill. Read its `SKILL.md` and `example-demo.mjs` first, and follow its workflow, including the contact-sheet check before sharing.
+
+- Cover one main flow in roughly 30–90 seconds. Don't tour every screen.
+- Sign in inside the demo script's `setup(r)`, which isn't recorded, so the video starts on the feature.
+- Use realistic QA data in the dev database, set up the way `qa-handoff` would, and re-seed between attempts. Nothing sensitive should be on screen.
+- Keep it silent: always pass `--no-sound` and never `--narrate`. Use `r.caption` to explain each step, since captions are the video's only explanation.
+- Write the demo script and the video to thread storage, never the repository:
+
+```bash
+node ~/.claude/skills/screen-record/rec.mjs demo.mjs -o walkthrough.mp4 --base http://localhost:3000 --no-sound
+```
+
+With `--no-sound`, `rec.mjs` writes a video-only MP4 with no audio track, so nothing needs stripping. Check the file size with `ls -lh walkthrough.mp4`. GitHub caps video attachments at 10 MB on free plans and 100 MB on paid plans. If it's too big, re-record with a lower `--scale` (for example `--scale 1`) or `--fps` (for example `--fps 30`), or shorten the flow.
+
+### Publish screenshots and the walkthrough with GitHub CLI attachments
 
 Keep PR screenshots, recordings, and other QA evidence outside the repository in thread storage. A request to include media in a PR means uploading attachments, not adding or committing media files to the repository. Never commit QA media unless the user explicitly asks for those files to be added to the repository.
 
 Use the executor MCP GitHub connection for everything except media uploads. Before using `execute`, read executor's `skills({ name: "execute" })` documentation. Discover tools with `tools.search({ query: "github <intent>" })` or saved connections with `tools.executor.coreTools.connections.list({})`. Inspect the selected schema with `tools.describe.tool({ path })`, then call the full discovered connection path. Check the result for errors and follow pagination when needed. Report connection or capability blockers instead of substituting GitHub CLI. Use read-only tools for investigation; remote writes require authorization for the specific task. Authorization for a complete workflow covers its necessary remote writes; do not ask again for each step.
 
-Executor cannot upload images or videos, so upload screenshots with GitHub CLI. From the thread-storage directory that holds the screenshots, run:
+Executor cannot upload images or videos, so upload screenshots and the walkthrough with GitHub CLI. From the thread-storage directory that holds the media, run:
 
 ```bash
-gh pr edit <number> --repo <owner>/<repo> --body-file <body.md> --attach './<file>.png#<alt text>'
+gh pr edit <number> --repo <owner>/<repo> --body-file <body.md> --attach './<file>.png#<alt text>' --attach './walkthrough.mp4'
 ```
 
-Repeat `--attach` for each screenshot. In the body file's `Screenshots` section, reference each image with a relative path that exactly matches its `--attach` path, e.g. `![alt](./shot.png)`, so gh rewrites each reference in place with the uploaded `github.com/user-attachments` URL.
+Repeat `--attach` for each screenshot. Leave the `#<alt text>` suffix off the video: gh doesn't accept alt text for video. In the body file's `Screenshots` section, reference each image with a relative path that exactly matches its `--attach` path, e.g. `![alt](./shot.png)`. In a `Video walkthrough` section, reference the video the same way on its own line, e.g. `![Walkthrough](./walkthrough.mp4)`. gh rewrites each reference in place with the uploaded `github.com/user-attachments` URL, and GitHub renders the video URL as an inline player.
 
-After uploading, read the PR back through executor and confirm the body contains `github.com/user-attachments` URLs and no local paths.
+After uploading, read the PR back through executor and confirm the body contains `github.com/user-attachments` URLs for every screenshot and the video, and no local paths.
 
-If the gh upload fails, keep the original screenshots in thread storage, list their paths in the PR body, and report the failure. An upload failure is not authorization to add or commit media to the repository.
+If the gh upload fails, or the video is over GitHub's size limit, keep the original screenshots and video in thread storage, list their paths in the PR body, and report the failure. An upload failure is not authorization to add or commit media to the repository.
 
-Skip screenshots when they are not applicable, such as API-only, background-job, or documentation changes.
+Skip screenshots and the walkthrough when they are not applicable, such as API-only, background-job, or documentation changes.
 
 ## 7. Open the PR
 
@@ -104,7 +120,7 @@ Discover and describe the executor GitHub PR-creation tool. Submit the resolved 
 
 If the user approved a reviewer in step 5, discover and describe the review-request tool and request that reviewer after creation. Do not request a reviewer otherwise. Do not merge or make unrelated remote changes.
 
-Executor can't upload media, so attach screenshots after creating the PR with `gh pr edit ... --attach` as described in step 6.
+Executor can't upload media, so attach screenshots and the walkthrough after creating the PR with `gh pr edit ... --attach` as described in step 6.
 
 ### Base branch
 Always set the base to the resolved branch from step 3. Use `main` only when step 3 resolves it to `main`.
@@ -118,4 +134,5 @@ Include:
 - A summary of what changed and why
 - `Fixes #<issue-number>` (or `Closes #<issue-number>`) to auto-close the GitHub issue when merged — ask the user for the issue number if you don't know it
 - A `Screenshots` section with 1–3 embedded images that have descriptive alt text and a one-line caption each, when the change adds or modifies visible views
+- A `Video walkthrough` section with the embedded silent walkthrough and a one-line caption of the flow it shows, for the same visible changes
 - Any notes about pre-existing test failures or known limitations
